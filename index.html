@@ -3,121 +3,146 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<meta name="description" content="RMS v3.0 - Ride Management System">
+<meta name="description" content="RMS v4.0 - Ride Management System">
 <meta name="theme-color" content="#FF9500">
 <title>RMS - Ride Management System</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="RMS">
-<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%23FF9500' width='180' height='180'/><text x='50%' y='50%' font-size='80' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='middle'>RMS</text></svg>">
+
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+  import {
+    getFirestore, collection, doc, getDoc, getDocs, addDoc, setDoc,
+    updateDoc, deleteDoc, query, where, orderBy, onSnapshot, serverTimestamp
+  } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+  import {
+    getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged,
+    createUserWithEmailAndPassword
+  } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+
+  // ── FIREBASE CONFIG ──────────────────────────────────────────────────────
+  // Replace these values with your own Firebase project config.
+  // Steps: https://firebase.google.com/docs/web/setup
+  // Free tier (Spark plan) is sufficient for this app.
+  const firebaseConfig = {
+
+    apiKey: "AIzaSyD0zJjM-GAJw7T_Aehi6smf1WiJLIASI0U",
+    authDomain: "ride-management-system-7f299.firebaseapp.com",
+    projectId: "ride-management-system-7f299",
+    storageBucket: "ride-management-system-7f299.firebasestorage.app",
+    messagingSenderId: "408147683778",
+    appId: "1:408147683778:web:180ef4ce6563ccdfc90e5b"
+
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const IS_CONFIGURED = !firebaseConfig.apiKey.includes("YOUR_");
+
+  let app, db, auth;
+  if (IS_CONFIGURED) {
+    app  = initializeApp(firebaseConfig);
+    db   = getFirestore(app);
+    auth = getAuth(app);
+  }
+
+  // Expose to global scope so non-module scripts can call them
+  window._firebase = {
+    IS_CONFIGURED,
+    db, auth,
+    collection, doc, getDoc, getDocs, addDoc, setDoc,
+    updateDoc, deleteDoc, query, where, orderBy, onSnapshot, serverTimestamp,
+    signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword
+  };
+
+  // Boot the app once Firebase is ready
+  window.addEventListener("DOMContentLoaded", () => window.rmsInit());
+</script>
+
+<!-- Chart.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<!-- html2pdf -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
 <style>
 :root{
-  --orange:#FF9500;
-  --orange-dark:#E8850A;
-  --ink:#1a2332;
-  --ink-soft:#475569;
-  --line:#e6e9ef;
-  --bg:#f4f6f9;
-  --card:#ffffff;
-  --green:#1f9d55;
-  --green-bg:#e9f9ef;
-  --red:#d93939;
-  --red-bg:#fdecec;
-  --blue:#2563eb;
-  --blue-bg:#eaf1ff;
+  --orange:#FF9500; --orange-dark:#E8850A;
+  --ink:#1a2332; --ink-soft:#475569; --line:#e6e9ef;
+  --bg:#f4f6f9; --card:#ffffff;
+  --green:#1f9d55; --green-bg:#e9f9ef;
+  --red:#d93939;   --red-bg:#fdecec;
+  --blue:#2563eb;  --blue-bg:#eaf1ff;
   --radius:10px;
 }
 *{margin:0;padding:0;box-sizing:border-box;}
-body{
-  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
-  background:var(--bg);
-  color:var(--ink);
-  line-height:1.5;
-}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5;}
 ::-webkit-scrollbar{width:7px;height:7px;}
 ::-webkit-scrollbar-thumb{background:#cbd2dc;border-radius:4px;}
 
-svg.icon{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;display:block;flex-shrink:0;}
-
-/* ===================== LOGIN ===================== */
-.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#fff7ed 0%,#fdf2e9 100%);padding:1.2rem;}
-.login-card{background:var(--card);border-radius:16px;padding:2.4rem 2rem;box-shadow:0 20px 50px rgba(20,20,40,0.12);width:100%;max-width:380px;border:1px solid var(--line);}
+/* ── LOGIN ── */
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#fff7ed,#fdf2e9);padding:1.2rem;}
+.login-card{background:#fff;border-radius:16px;padding:2.4rem 2rem;box-shadow:0 20px 50px rgba(20,20,40,.12);width:100%;max-width:380px;border:1px solid var(--line);}
 .login-logo{text-align:center;margin-bottom:1.8rem;}
 .login-logo-mark{width:56px;height:56px;border-radius:14px;background:linear-gradient(135deg,var(--orange),var(--orange-dark));display:flex;align-items:center;justify-content:center;margin:0 auto .9rem;box-shadow:0 8px 20px rgba(255,149,0,.3);}
-.login-logo-mark svg{width:28px;height:28px;stroke:white;}
+.login-logo-mark svg{width:28px;height:28px;stroke:white;fill:none;stroke-width:2;}
 .login-logo h1{color:var(--ink);font-size:1.4rem;font-weight:700;letter-spacing:.5px;}
 .login-logo p{color:#94a3b8;font-size:.82rem;margin-top:.2rem;}
-.login-form .form-group{margin-bottom:1.1rem;}
+.login-form .fg{margin-bottom:1.1rem;}
 .login-form label{display:block;font-weight:600;font-size:.82rem;margin-bottom:.4rem;color:var(--ink-soft);}
 .login-form input{width:100%;padding:.7rem .8rem;border:1.5px solid var(--line);border-radius:8px;font-size:.92rem;transition:.2s;}
 .login-form input:focus{outline:none;border-color:var(--orange);box-shadow:0 0 0 3px rgba(255,149,0,.12);}
-.demo-box{background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:.8rem .9rem;margin-bottom:1.2rem;font-size:.78rem;color:var(--ink-soft);}
-.demo-box b{color:var(--orange-dark);}
 .login-btn{width:100%;padding:.8rem;background:linear-gradient(135deg,var(--orange),var(--orange-dark));color:white;border:none;border-radius:8px;font-weight:700;font-size:.95rem;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.5rem;transition:.2s;}
 .login-btn:hover{filter:brightness(1.05);transform:translateY(-1px);}
-.login-error{background:var(--red-bg);color:var(--red);padding:.6rem .8rem;border-radius:8px;font-size:.82rem;margin-bottom:1rem;display:none;}
+.login-btn svg{width:16px;height:16px;stroke:white;fill:none;stroke-width:2;}
+.login-error{background:var(--red-bg);color:var(--red);padding:.65rem .9rem;border-radius:8px;font-size:.83rem;margin-bottom:1rem;display:none;border-left:3px solid var(--red);}
 
-/* ===================== APP SHELL ===================== */
+/* Cloud config banner */
+.cloud-notice{background:#fff7ed;border:1px solid #fcd09a;border-radius:8px;padding:.8rem 1rem;margin-bottom:1.2rem;font-size:.78rem;color:#7c4a00;line-height:1.5;}
+.cloud-notice b{color:var(--orange-dark);}
+.cloud-notice code{background:#ffe8c0;padding:.1rem .3rem;border-radius:4px;font-size:.76rem;}
+
+/* ── TOP BAR ── */
 #mainApp{display:none;min-height:100vh;flex-direction:column;}
-.topbar{
-  background:var(--ink);
-  color:white;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  padding:.65rem 1rem;
-  position:sticky;top:0;z-index:200;
-  box-shadow:0 2px 10px rgba(0,0,0,.12);
-}
+.topbar{background:var(--ink);color:white;display:flex;align-items:center;justify-content:space-between;padding:.65rem 1rem;position:sticky;top:0;z-index:200;box-shadow:0 2px 10px rgba(0,0,0,.12);}
 .topbar-left{display:flex;align-items:center;gap:.7rem;}
 .brand{display:flex;align-items:center;gap:.55rem;font-weight:700;font-size:1.02rem;}
 .brand-mark{width:30px;height:30px;border-radius:8px;background:var(--orange);display:flex;align-items:center;justify-content:center;}
-.brand-mark svg{width:17px;height:17px;stroke:white;}
+.brand-mark svg{width:17px;height:17px;stroke:white;fill:none;stroke-width:2;}
 .brand small{display:block;font-size:.6rem;font-weight:500;color:#94a3b8;letter-spacing:.5px;}
-
 .menu-btn{display:none;background:none;border:none;color:white;cursor:pointer;padding:.4rem;}
-.menu-btn svg{width:22px;height:22px;stroke:white;}
-
-.nav-row{display:flex;align-items:center;gap:.25rem;}
-.nav-item{
-  display:flex;align-items:center;gap:.45rem;
-  padding:.55rem .85rem;border-radius:8px;
-  color:#cbd5e1;cursor:pointer;font-size:.85rem;font-weight:600;
-  transition:.15s;white-space:nowrap;
-}
-.nav-item svg{width:16px;height:16px;}
+.menu-btn svg{width:22px;height:22px;stroke:white;fill:none;stroke-width:2;}
+.nav-row{display:flex;align-items:center;gap:.2rem;}
+.nav-item{display:flex;align-items:center;gap:.45rem;padding:.55rem .85rem;border-radius:8px;color:#cbd5e1;cursor:pointer;font-size:.85rem;font-weight:600;transition:.15s;white-space:nowrap;}
+.nav-item svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;}
 .nav-item:hover{background:rgba(255,255,255,.08);color:white;}
 .nav-item.active{background:var(--orange);color:white;}
-
 .topbar-right{display:flex;align-items:center;gap:.7rem;}
+.sync-indicator{display:flex;align-items:center;gap:.4rem;font-size:.72rem;color:#94a3b8;padding:.3rem .6rem;border-radius:20px;border:1px solid #3a4252;}
+.sync-indicator.online{color:#4ade80;border-color:#1a4731;}
+.sync-indicator.offline{color:#f87171;border-color:#4a1e1e;}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:currentColor;}
 .user-chip{display:flex;align-items:center;gap:.55rem;cursor:pointer;padding:.3rem .5rem .3rem .3rem;border-radius:20px;transition:.15s;}
 .user-chip:hover{background:rgba(255,255,255,.08);}
 .user-avatar{width:30px;height:30px;border-radius:50%;background:var(--orange);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.8rem;color:white;}
-.user-meta{line-height:1.15;text-align:left;}
 .user-meta .un{font-size:.8rem;font-weight:600;color:white;}
 .user-meta .ur{font-size:.65rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.4px;}
 .logout-btn{background:none;border:1px solid #3a4252;color:#cbd5e1;border-radius:7px;padding:.45rem .6rem;cursor:pointer;display:flex;align-items:center;transition:.15s;}
 .logout-btn:hover{border-color:var(--red);color:var(--red);}
-.logout-btn svg{width:16px;height:16px;}
+.logout-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;}
 
-/* Mobile nav drawer */
+/* Mobile Drawer */
 .mobile-nav-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:250;}
-.mobile-nav-overlay.active{display:block;}
-.mobile-nav{
-  position:fixed;top:0;left:0;height:100%;width:250px;
-  background:var(--ink);z-index:260;
-  transform:translateX(-100%);transition:transform .25s ease;
-  padding:1rem 0;overflow-y:auto;
-}
-.mobile-nav.active{transform:translateX(0);}
+.mobile-nav-overlay.open{display:block;}
+.mobile-nav{position:fixed;top:0;left:0;height:100%;width:240px;background:var(--ink);z-index:260;transform:translateX(-100%);transition:transform .25s ease;padding:1rem 0;overflow-y:auto;}
+.mobile-nav.open{transform:translateX(0);}
 .mobile-nav .nav-item{color:#cbd5e1;padding:.85rem 1.2rem;border-radius:0;font-size:.9rem;}
 .mobile-nav .nav-item.active{background:rgba(255,149,0,.15);color:var(--orange);border-left:3px solid var(--orange);}
 .mobile-nav-close{display:flex;justify-content:flex-end;padding:0 1rem .5rem;}
-.mobile-nav-close svg{width:20px;height:20px;stroke:#94a3b8;cursor:pointer;}
+.mobile-nav-close svg{width:20px;height:20px;stroke:#94a3b8;fill:none;cursor:pointer;}
 
-/* ===================== MAIN CONTENT ===================== */
+/* ── MAIN ── */
 .main-content{flex:1;padding:1.6rem;max-width:1280px;width:100%;margin:0 auto;}
 .content-section{display:none;animation:fadeIn .25s ease;}
 .content-section.active{display:block;}
@@ -125,23 +150,24 @@ svg.icon{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;str
 
 .section-header{margin-bottom:1.6rem;display:flex;align-items:flex-start;gap:.8rem;}
 .section-header .si{width:38px;height:38px;border-radius:9px;background:var(--orange);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.section-header .si svg{width:20px;height:20px;stroke:white;}
+.section-header .si svg{width:20px;height:20px;stroke:white;fill:none;stroke-width:2;}
 .section-title{font-size:1.35rem;font-weight:700;color:var(--ink);}
 .section-subtitle{color:#94a3b8;font-size:.85rem;margin-top:.15rem;}
 
 .card{background:var(--card);border-radius:var(--radius);padding:1.5rem;box-shadow:0 1px 3px rgba(20,20,40,.06);margin-bottom:1.5rem;border:1px solid var(--line);}
-.card h3{display:flex;align-items:center;gap:.5rem;color:var(--ink);margin-bottom:1.2rem;font-size:1rem;font-weight:700;}
-.card h3 svg{width:18px;height:18px;stroke:var(--orange);}
+.card-title{display:flex;align-items:center;gap:.5rem;color:var(--ink);margin-bottom:1.2rem;font-size:1rem;font-weight:700;}
+.card-title svg{width:18px;height:18px;stroke:var(--orange);fill:none;stroke-width:2;}
 
 .form-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1.1rem;margin-bottom:1.1rem;}
-.form-group{display:flex;flex-direction:column;}
-.form-group label{font-weight:600;margin-bottom:.4rem;color:var(--ink-soft);font-size:.85rem;}
-.form-group input,.form-group select{padding:.65rem .75rem;border:1.5px solid var(--line);border-radius:7px;font-size:.9rem;font-family:inherit;transition:.15s;background:white;}
-.form-group input:focus,.form-group select:focus{outline:none;border-color:var(--orange);box-shadow:0 0 0 3px rgba(255,149,0,.1);}
-.required{color:var(--red);}
+.fg{display:flex;flex-direction:column;}
+.fg label{font-weight:600;margin-bottom:.4rem;color:var(--ink-soft);font-size:.85rem;}
+.fg input,.fg select{padding:.65rem .75rem;border:1.5px solid var(--line);border-radius:7px;font-size:.9rem;font-family:inherit;transition:.15s;background:white;}
+.fg input:focus,.fg select:focus{outline:none;border-color:var(--orange);box-shadow:0 0 0 3px rgba(255,149,0,.1);}
+.fg input:read-only{background:#f4f6f9;}
+.req{color:var(--red);}
 
 .btn{padding:.65rem 1.15rem;border:none;border-radius:7px;font-size:.85rem;font-weight:700;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:.45rem;white-space:nowrap;}
-.btn svg{width:15px;height:15px;}
+.btn svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;}
 .btn-primary{background:var(--orange);color:white;}
 .btn-primary:hover{background:var(--orange-dark);}
 .btn-secondary{background:#eef1f5;color:var(--ink-soft);}
@@ -154,26 +180,26 @@ svg.icon{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;str
 .btn-info:hover{background:#1d4ed8;}
 .btn-group{display:flex;gap:.7rem;flex-wrap:wrap;}
 
-.category-selector{display:flex;gap:.6rem;margin-bottom:1.4rem;flex-wrap:wrap;}
-.category-btn{padding:.6rem 1.1rem;border:1.5px solid var(--line);background:white;border-radius:8px;cursor:pointer;font-weight:600;font-size:.85rem;transition:.15s;display:flex;align-items:center;gap:.4rem;}
-.category-btn svg{width:15px;height:15px;}
-.category-btn.active{border-color:var(--orange);background:#fff7ed;color:var(--orange-dark);}
+.cat-selector{display:flex;gap:.6rem;margin-bottom:1.4rem;flex-wrap:wrap;}
+.cat-btn{padding:.6rem 1.1rem;border:1.5px solid var(--line);background:white;border-radius:8px;cursor:pointer;font-weight:600;font-size:.85rem;transition:.15s;display:flex;align-items:center;gap:.4rem;}
+.cat-btn svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;}
+.cat-btn.active{border-color:var(--orange);background:#fff7ed;color:var(--orange-dark);}
 
-.table-wrap{background:white;border-radius:var(--radius);overflow:auto;border:1px solid var(--line);margin-bottom:1.5rem;}
-table{width:100%;border-collapse:collapse;min-width:600px;}
+.table-wrap{background:white;border-radius:var(--radius);overflow:auto;border:1px solid var(--line);margin-bottom:1rem;}
+table{width:100%;border-collapse:collapse;min-width:500px;}
 thead{background:#f8fafc;}
 th{padding:.75rem .9rem;text-align:left;font-weight:700;font-size:.72rem;text-transform:uppercase;letter-spacing:.4px;color:#64748b;border-bottom:1.5px solid var(--line);}
 td{padding:.8rem .9rem;border-bottom:1px solid #f1f3f7;font-size:.88rem;}
 tbody tr:hover{background:#fafbfc;}
 tbody tr:last-child td{border-bottom:none;}
 
-.badge{padding:.3rem .7rem;border-radius:20px;font-weight:700;font-size:.74rem;display:inline-block;}
+.badge{padding:.28rem .7rem;border-radius:20px;font-weight:700;font-size:.74rem;display:inline-block;}
 .badge-paid{background:var(--green-bg);color:var(--green);}
 .badge-balance{background:var(--red-bg);color:var(--red);}
 
 .action-buttons{display:flex;gap:.4rem;}
 .icon-btn{width:30px;height:30px;border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s;}
-.icon-btn svg{width:14px;height:14px;}
+.icon-btn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;}
 .icon-btn-edit{background:var(--blue-bg);color:var(--blue);}
 .icon-btn-edit:hover{background:var(--blue);color:white;}
 .icon-btn-delete{background:var(--red-bg);color:var(--red);}
@@ -181,20 +207,20 @@ tbody tr:last-child td{border-bottom:none;}
 
 .alert{padding:.85rem 1.1rem;border-radius:8px;margin-bottom:1.1rem;display:flex;align-items:center;gap:.7rem;border-left:4px solid;font-size:.86rem;animation:slideDown .25s ease;}
 @keyframes slideDown{from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:translateY(0);}}
-.alert svg{width:17px;height:17px;flex-shrink:0;}
+.alert svg{width:17px;height:17px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:2;}
 .alert-success{background:var(--green-bg);color:#14693c;border-color:var(--green);}
 .alert-error{background:var(--red-bg);color:#a82424;border-color:var(--red);}
 .alert-info{background:var(--blue-bg);color:#1d4ed8;border-color:var(--blue);}
-.alert-close{margin-left:auto;cursor:pointer;opacity:.6;}
+.alert-close{margin-left:auto;cursor:pointer;opacity:.6;font-size:1.1rem;line-height:1;}
 .alert-close:hover{opacity:1;}
 
 .search-bar{display:flex;gap:.8rem;margin-bottom:1.1rem;flex-wrap:wrap;}
-.search-bar input,.search-bar select{padding:.6rem .75rem;border:1.5px solid var(--line);border-radius:7px;font-size:.85rem;}
+.search-bar input,.search-bar select{padding:.6rem .75rem;border:1.5px solid var(--line);border-radius:7px;font-size:.85rem;background:white;}
 
 .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1.1rem;margin-bottom:1.5rem;}
-.stat-card{background:white;border-radius:var(--radius);padding:1.2rem 1.3rem;border:1px solid var(--line);position:relative;overflow:hidden;}
+.stat-card{background:white;border-radius:var(--radius);padding:1.2rem 1.3rem;border:1px solid var(--line);}
 .stat-card .si{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;margin-bottom:.7rem;}
-.stat-card .si svg{width:17px;height:17px;}
+.stat-card .si svg{width:17px;height:17px;fill:none;stroke-width:2;}
 .stat-card.c1 .si{background:#fff1e0;} .stat-card.c1 .si svg{stroke:var(--orange);}
 .stat-card.c2 .si{background:var(--blue-bg);} .stat-card.c2 .si svg{stroke:var(--blue);}
 .stat-card.c3 .si{background:var(--green-bg);} .stat-card.c3 .si svg{stroke:var(--green);}
@@ -203,81 +229,82 @@ tbody tr:last-child td{border-bottom:none;}
 .stat-value{font-size:1.6rem;font-weight:800;color:var(--ink);}
 
 .chart-box{position:relative;height:280px;}
+.empty-state{text-align:center;color:#b0b8c4;padding:2rem;font-size:.85rem;}
+
+.total-bar{display:flex;justify-content:space-between;align-items:center;margin-top:1.2rem;padding:1rem 1.2rem;background:#fff7ed;border-radius:8px;border-left:4px solid var(--orange);}
+.total-bar .tl{font-weight:700;color:var(--ink);font-size:.9rem;}
+.total-bar .tv{font-size:1.3rem;font-weight:800;color:var(--orange-dark);}
+
+/* Spinner overlay */
+.spinner-overlay{position:fixed;inset:0;background:rgba(255,255,255,.7);display:none;align-items:center;justify-content:center;z-index:999;}
+.spinner-overlay.active{display:flex;}
+.spinner{width:40px;height:40px;border:4px solid var(--line);border-top-color:var(--orange);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
 
 .modal{display:none;position:fixed;inset:0;background:rgba(15,20,30,.55);z-index:400;align-items:center;justify-content:center;padding:1rem;}
 .modal.active{display:flex;}
 .modal-content{background:white;border-radius:14px;padding:1.8rem;max-width:480px;width:100%;box-shadow:0 25px 60px rgba(0,0,0,.3);}
-.modal-header{font-size:1.1rem;font-weight:700;margin-bottom:1.2rem;color:var(--ink);display:flex;align-items:center;gap:.5rem;}
+.modal-header{font-size:1.1rem;font-weight:700;margin-bottom:1.2rem;color:var(--ink);}
 .modal-footer{display:flex;gap:.7rem;justify-content:flex-end;margin-top:1.4rem;}
-
-.empty-state{text-align:center;color:#b0b8c4;padding:2rem;font-size:.85rem;}
 
 #alertContainer{position:fixed;top:70px;right:1rem;z-index:500;max-width:380px;width:calc(100% - 2rem);}
 
-@media (max-width:900px){
-  .nav-row{display:none;}
-  .menu-btn{display:flex;align-items:center;}
-  .topbar-left{gap:.5rem;}
+@media(max-width:900px){.nav-row{display:none;} .menu-btn{display:flex;align-items:center;} .user-meta{display:none;}}
+@media(max-width:600px){
+  .main-content{padding:1rem;} .section-title{font-size:1.15rem;} .card{padding:1.1rem;}
+  .form-row{grid-template-columns:1fr;} .stats-grid{grid-template-columns:repeat(2,1fr);}
+  .btn-group{flex-direction:column;} .btn-group .btn{justify-content:center;width:100%;}
 }
-@media (max-width:600px){
-  .main-content{padding:1rem;}
-  .section-title{font-size:1.15rem;}
-  .card{padding:1.1rem;}
-  .form-row{grid-template-columns:1fr;}
-  .stats-grid{grid-template-columns:repeat(2,1fr);}
-  .user-meta{display:none;}
-  .btn-group{flex-direction:column;}
-  .btn-group .btn{justify-content:center;width:100%;}
-}
-@media print{
-  .topbar,.no-print{display:none;}
-  .main-content{padding:0;}
-}
+@media print{.topbar,.no-print{display:none;} .main-content{padding:0;background:white;}}
 </style>
 </head>
 <body>
 
-<!-- ============ LOGIN ============ -->
+<!-- ===== LOGIN ===== -->
 <div class="login-wrap" id="loginPage">
   <div class="login-card">
     <div class="login-logo">
       <div class="login-logo-mark">
-        <svg class="icon" viewBox="0 0 24 24"><path d="M5 17h14M5 17a2 2 0 1 0 4 0M5 17a2 2 0 1 1 4 0m6 0a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0M5 17l1.5-7.5A2 2 0 0 1 8.45 8h7.1a2 2 0 0 1 1.95 1.5L19 17M3 17h2m14 0h2"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M5 17h14M5 17a2 2 0 1 0 4 0M5 17a2 2 0 1 1 4 0m6 0a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0M5 17l1.5-7.5A2 2 0 0 1 8.45 8h7.1a2 2 0 0 1 1.95 1.5L19 17M3 17h2m14 0h2"/></svg>
       </div>
       <h1>RMS</h1>
       <p>Ride Management System</p>
     </div>
+
+    <div id="cloudNotice" class="cloud-notice" style="display:none;">
+      <b>Setup Required:</b> Firebase is not configured.<br>
+      Open this HTML file, find <code>firebaseConfig</code> near the top, and replace the placeholder values with your project credentials.<br>
+      <a href="https://console.firebase.google.com/" target="_blank" style="color:var(--orange-dark);">Create free Firebase project →</a>
+    </div>
+
     <div class="login-error" id="loginError"></div>
+
     <form class="login-form" onsubmit="handleLogin(event)">
-      <div class="form-group">
+      <div class="fg">
         <label>User ID / Rider ID</label>
         <input type="text" id="loginId" placeholder="e.g. admin or R001" required autofocus autocomplete="username">
       </div>
-      <div class="form-group">
+      <div class="fg" style="margin-bottom:1.2rem;">
         <label>Password</label>
         <input type="password" id="loginPassword" placeholder="Enter your password" required autocomplete="current-password">
       </div>
-      <div class="demo-box">
-        <b>Demo:</b> Admin → admin / admin123<br>
-        Riders use the password set for them in Rider Master.
-      </div>
       <button type="submit" class="login-btn">
-        <svg class="icon" viewBox="0 0 24 24" style="stroke:white;width:16px;height:16px;"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
         Sign In
       </button>
     </form>
   </div>
 </div>
 
-<!-- ============ APP ============ -->
+<!-- ===== APP ===== -->
 <div id="mainApp">
   <div class="topbar">
     <div class="topbar-left">
-      <button class="menu-btn" onclick="toggleMobileNav(true)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+      <button class="menu-btn" onclick="toggleDrawer(true)">
+        <svg viewBox="0 0 24 24"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
       </button>
       <div class="brand">
-        <div class="brand-mark"><svg class="icon" viewBox="0 0 24 24" style="stroke:white;width:16px;height:16px;"><path d="M5 17h14M5 17a2 2 0 1 0 4 0M5 17a2 2 0 1 1 4 0m6 0a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0M5 17l1.5-7.5A2 2 0 0 1 8.45 8h7.1a2 2 0 0 1 1.95 1.5L19 17M3 17h2m14 0h2"/></svg></div>
+        <div class="brand-mark"><svg viewBox="0 0 24 24"><path d="M5 17h14M5 17a2 2 0 1 0 4 0M5 17a2 2 0 1 1 4 0m6 0a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0M5 17l1.5-7.5A2 2 0 0 1 8.45 8h7.1a2 2 0 0 1 1.95 1.5L19 17M3 17h2m14 0h2"/></svg></div>
         <div>RMS <small>Ride Management</small></div>
       </div>
     </div>
@@ -285,7 +312,10 @@ tbody tr:last-child td{border-bottom:none;}
     <div class="nav-row" id="desktopNav"></div>
 
     <div class="topbar-right">
-      <div class="user-chip" title="Account">
+      <div class="sync-indicator" id="syncIndicator">
+        <div class="sync-dot"></div><span id="syncLabel">Offline</span>
+      </div>
+      <div class="user-chip">
         <div class="user-avatar" id="userInitial">A</div>
         <div class="user-meta">
           <div class="un" id="displayUserName">Admin</div>
@@ -293,15 +323,14 @@ tbody tr:last-child td{border-bottom:none;}
         </div>
       </div>
       <button class="logout-btn" onclick="handleLogout()" title="Logout">
-        <svg class="icon" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
       </button>
     </div>
   </div>
 
-  <!-- Mobile drawer -->
-  <div class="mobile-nav-overlay" id="mobileNavOverlay" onclick="toggleMobileNav(false)"></div>
-  <div class="mobile-nav" id="mobileNav">
-    <div class="mobile-nav-close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" onclick="toggleMobileNav(false)"><path d="M18 6L6 18M6 6l12 12"/></svg></div>
+  <div class="mobile-nav-overlay" id="drawerOverlay" onclick="toggleDrawer(false)"></div>
+  <div class="mobile-nav" id="drawerNav">
+    <div class="mobile-nav-close"><svg viewBox="0 0 24 24" onclick="toggleDrawer(false)"><path d="M18 6L6 18M6 6l12 12"/></svg></div>
     <div id="mobileNavList"></div>
   </div>
 
@@ -310,100 +339,54 @@ tbody tr:last-child td{border-bottom:none;}
     <!-- DASHBOARD -->
     <div id="dashboard" class="content-section active">
       <div class="section-header">
-        <div class="si"><svg class="icon" viewBox="0 0 24 24"><path d="M3 3v18h18M7 14l4-4 4 4 5-5"/></svg></div>
-        <div>
-          <div class="section-title">Dashboard</div>
-          <div class="section-subtitle">Live overview of your ride operations</div>
-        </div>
+        <div class="si"><svg viewBox="0 0 24 24"><path d="M3 3v18h18M7 14l4-4 4 4 5-5"/></svg></div>
+        <div><div class="section-title">Dashboard</div><div class="section-subtitle">Live overview of your ride operations</div></div>
       </div>
-
       <div id="dashboardAlerts"></div>
-
       <div class="stats-grid">
-        <div class="stat-card c1">
-          <div class="si"><svg class="icon" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-          <div class="stat-label">Total Riders</div>
-          <div class="stat-value" id="dashTotalRiders">0</div>
-        </div>
-        <div class="stat-card c2">
-          <div class="si"><svg class="icon" viewBox="0 0 24 24"><path d="M5 17h14M5 17a2 2 0 1 0 4 0M5 17a2 2 0 1 1 4 0m6 0a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0M5 17l1.5-7.5A2 2 0 0 1 8.45 8h7.1a2 2 0 0 1 1.95 1.5L19 17"/></svg></div>
-          <div class="stat-label">Total Trips</div>
-          <div class="stat-value" id="dashTotalTrips">0</div>
-        </div>
-        <div class="stat-card c3">
-          <div class="si"><svg class="icon" viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
-          <div class="stat-label">Total Revenue</div>
-          <div class="stat-value" id="dashTotalRevenue">₹0</div>
-        </div>
-        <div class="stat-card c4">
-          <div class="si"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
-          <div class="stat-label">Outstanding</div>
-          <div class="stat-value" id="dashTotalOutstanding">₹0</div>
-        </div>
+        <div class="stat-card c1"><div class="si"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div><div class="stat-label">Total Riders</div><div class="stat-value" id="dashTotalRiders">0</div></div>
+        <div class="stat-card c2"><div class="si"><svg viewBox="0 0 24 24"><path d="M5 17h14M5 17a2 2 0 1 0 4 0M5 17a2 2 0 1 1 4 0m6 0a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0M5 17l1.5-7.5A2 2 0 0 1 8.45 8h7.1a2 2 0 0 1 1.95 1.5L19 17"/></svg></div><div class="stat-label">Total Trips</div><div class="stat-value" id="dashTotalTrips">0</div></div>
+        <div class="stat-card c3"><div class="si"><svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><div class="stat-label">Total Revenue</div><div class="stat-value" id="dashTotalRevenue">₹0</div></div>
+        <div class="stat-card c4"><div class="si"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div><div class="stat-label">Outstanding</div><div class="stat-value" id="dashTotalOutstanding">₹0</div></div>
       </div>
-
+      <div class="card"><div class="card-title"><svg viewBox="0 0 24 24"><path d="M3 3v18h18M7 14l4-4 4 4 5-5"/></svg>Revenue Trends</div><div class="chart-box"><canvas id="revenueChart"></canvas></div></div>
+      <div class="card"><div class="card-title"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10h-10z"/></svg>Payment Method Split</div><div class="chart-box"><canvas id="paymentChart"></canvas></div></div>
       <div class="card">
-        <h3><svg viewBox="0 0 24 24"><path d="M3 3v18h18M7 14l4-4 4 4 5-5"/></svg>Revenue Trends</h3>
-        <div class="chart-box"><canvas id="revenueChart"></canvas></div>
-      </div>
-
-      <div class="card">
-        <h3><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10h-10z"/></svg>Payment Method Split</h3>
-        <div class="chart-box"><canvas id="paymentChart"></canvas></div>
-      </div>
-
-      <div class="card">
-        <h3><svg viewBox="0 0 24 24"><path d="M4 19h16M4 19V5h16v14"/></svg>Recent Transactions</h3>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Date</th><th>Rider</th><th>Amount</th><th>Payment</th><th>Status</th></tr></thead>
-            <tbody id="dashRecentTrips"><tr><td colspan="5" class="empty-state">No transactions yet</td></tr></tbody>
-          </table>
-        </div>
+        <div class="card-title"><svg viewBox="0 0 24 24"><path d="M4 19h16M4 19V5h16v14"/></svg>Recent Transactions</div>
+        <div class="table-wrap"><table><thead><tr><th>Date</th><th>Rider</th><th>Amount</th><th>Payment</th><th>Status</th></tr></thead><tbody id="dashRecentTrips"><tr><td colspan="5" class="empty-state">No transactions yet</td></tr></tbody></table></div>
       </div>
     </div>
 
     <!-- RIDER MASTER -->
     <div id="rider-master" class="content-section">
       <div class="section-header">
-        <div class="si"><svg class="icon" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-        <div>
-          <div class="section-title">Rider Master</div>
-          <div class="section-subtitle">Manage rider information and login credentials</div>
-        </div>
+        <div class="si"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+        <div><div class="section-title">Rider Master</div><div class="section-subtitle">Manage rider information and login credentials</div></div>
       </div>
-
       <div id="riderAlerts"></div>
-
       <div class="card">
-        <div class="category-selector">
-          <button class="category-btn active" onclick="setRiderCategory('new')">
-            <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New Rider
-          </button>
-          <button class="category-btn" onclick="setRiderCategory('edit')">
-            <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit Rider
-          </button>
-          <button class="category-btn" onclick="setRiderCategory('view')">
-            <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>View All
-          </button>
+        <div class="cat-selector">
+          <button class="cat-btn active" onclick="setRiderCat('new',this)"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New Rider</button>
+          <button class="cat-btn" onclick="setRiderCat('edit',this)"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit Rider</button>
+          <button class="cat-btn" onclick="setRiderCat('view',this)"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>View All</button>
         </div>
 
-        <div id="newRiderSection">
+        <div id="secNew">
           <div class="form-row">
-            <div class="form-group"><label>Name of Rider <span class="required">*</span></label><input type="text" id="riderName" placeholder="Enter full name"></div>
-            <div class="form-group"><label>Rider ID / Login ID <span class="required">*</span></label><input type="text" id="riderId" placeholder="e.g., R001"></div>
+            <div class="fg"><label>Name of Rider <span class="req">*</span></label><input type="text" id="riderName" placeholder="Full name"></div>
+            <div class="fg"><label>Rider ID / Login ID <span class="req">*</span></label><input type="text" id="riderId" placeholder="e.g. R001"></div>
           </div>
           <div class="form-row">
-            <div class="form-group"><label>Email Address</label><input type="email" id="riderEmail" placeholder="rider@example.com"></div>
-            <div class="form-group"><label>Phone Number</label><input type="tel" id="riderPhone" placeholder="+91 XXXXX XXXXX"></div>
+            <div class="fg"><label>Email</label><input type="email" id="riderEmail" placeholder="rider@example.com"></div>
+            <div class="fg"><label>Phone</label><input type="tel" id="riderPhone" placeholder="+91 XXXXX XXXXX"></div>
           </div>
           <div class="form-row">
-            <div class="form-group"><label>Password <span class="required">*</span></label><input type="password" id="riderPassword" placeholder="Minimum 6 characters"></div>
-            <div class="form-group"><label>Confirm Password <span class="required">*</span></label><input type="password" id="riderPasswordConfirm" placeholder="Confirm password"></div>
+            <div class="fg"><label>Password <span class="req">*</span></label><input type="password" id="riderPassword" placeholder="Min 6 characters"></div>
+            <div class="fg"><label>Confirm Password <span class="req">*</span></label><input type="password" id="riderPasswordConfirm" placeholder="Confirm password"></div>
           </div>
           <div class="form-row">
-            <div class="form-group"><label>Pick Up Location <span class="required">*</span></label><input type="text" id="pickupLocation" placeholder="e.g., Park Avenue, Mumbai"></div>
-            <div class="form-group"><label>Drop Location <span class="required">*</span></label><input type="text" id="dropLocation" placeholder="e.g., Office, Mumbai"></div>
+            <div class="fg"><label>Pick Up Location <span class="req">*</span></label><input type="text" id="pickupLocation" placeholder="e.g. Park Avenue, Mumbai"></div>
+            <div class="fg"><label>Drop Location <span class="req">*</span></label><input type="text" id="dropLocation" placeholder="e.g. Office, Mumbai"></div>
           </div>
           <div class="btn-group">
             <button class="btn btn-primary" onclick="saveNewRider()"><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>Save Rider</button>
@@ -411,27 +394,24 @@ tbody tr:last-child td{border-bottom:none;}
           </div>
         </div>
 
-        <div id="editRiderSection" style="display:none;">
-          <div class="form-group" style="margin-bottom:1.1rem;">
-            <label>Select Rider to Edit <span class="required">*</span></label>
-            <select id="editRiderSelect" onchange="loadRiderForEdit()"><option value="">-- Select a rider --</option></select>
-          </div>
-          <div id="editFormFields" style="display:none;">
+        <div id="secEdit" style="display:none;">
+          <div class="fg" style="margin-bottom:1.1rem;"><label>Select Rider <span class="req">*</span></label><select id="editRiderSelect" onchange="loadRiderForEdit()"><option value="">-- Choose rider --</option></select></div>
+          <div id="editFields" style="display:none;">
             <div class="form-row">
-              <div class="form-group"><label>Name of Rider <span class="required">*</span></label><input type="text" id="editRiderName"></div>
-              <div class="form-group"><label>Rider ID</label><input type="text" id="editRiderId" readonly style="background:#f4f6f9;"></div>
+              <div class="fg"><label>Name <span class="req">*</span></label><input type="text" id="editRiderName"></div>
+              <div class="fg"><label>Rider ID</label><input type="text" id="editRiderId" readonly></div>
             </div>
             <div class="form-row">
-              <div class="form-group"><label>Email Address</label><input type="email" id="editRiderEmail"></div>
-              <div class="form-group"><label>Phone Number</label><input type="tel" id="editRiderPhone"></div>
+              <div class="fg"><label>Email</label><input type="email" id="editRiderEmail"></div>
+              <div class="fg"><label>Phone</label><input type="tel" id="editRiderPhone"></div>
             </div>
             <div class="form-row">
-              <div class="form-group"><label>New Password (leave blank to keep current)</label><input type="password" id="editRiderPassword"></div>
-              <div class="form-group"><label>Confirm Password</label><input type="password" id="editRiderPasswordConfirm"></div>
+              <div class="fg"><label>New Password (blank = keep current)</label><input type="password" id="editRiderPassword"></div>
+              <div class="fg"><label>Confirm Password</label><input type="password" id="editRiderPasswordConfirm"></div>
             </div>
             <div class="form-row">
-              <div class="form-group"><label>Pick Up Location</label><input type="text" id="editPickupLocation"></div>
-              <div class="form-group"><label>Drop Location</label><input type="text" id="editDropLocation"></div>
+              <div class="fg"><label>Pick Up Location</label><input type="text" id="editPickupLocation"></div>
+              <div class="fg"><label>Drop Location</label><input type="text" id="editDropLocation"></div>
             </div>
             <div class="btn-group">
               <button class="btn btn-primary" onclick="updateRider()"><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>Update Rider</button>
@@ -440,109 +420,82 @@ tbody tr:last-child td{border-bottom:none;}
           </div>
         </div>
 
-        <div id="viewRiderSection" style="display:none;">
-          <div class="form-group"><label>Search Rider</label><input type="text" id="riderSearchInput" placeholder="Search by name or ID..." onkeyup="filterRiderTable()"></div>
+        <div id="secView" style="display:none;">
+          <div class="fg"><label>Search Rider</label><input type="text" id="riderSearch" placeholder="Search by name or ID…" onkeyup="filterRiderTable()"></div>
         </div>
       </div>
 
       <div class="card">
-        <h3><svg viewBox="0 0 24 24"><path d="M4 19h16M4 19V5h16v14"/></svg>All Riders</h3>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Rider ID</th><th>Name</th><th>Email</th><th>Phone</th><th>Pick Up</th><th>Drop</th><th>Actions</th></tr></thead>
-            <tbody id="riderTableBody"><tr><td colspan="7" class="empty-state">No riders added yet</td></tr></tbody>
-          </table>
-        </div>
+        <div class="card-title"><svg viewBox="0 0 24 24"><path d="M4 19h16M4 19V5h16v14"/></svg>All Riders</div>
+        <div class="table-wrap"><table><thead><tr><th>Rider ID</th><th>Name</th><th>Email</th><th>Phone</th><th>Pick Up</th><th>Drop</th><th>Actions</th></tr></thead><tbody id="riderTableBody"><tr><td colspan="7" class="empty-state">No riders added yet</td></tr></tbody></table></div>
       </div>
     </div>
 
     <!-- TRIP ENTRY -->
     <div id="trip-entry" class="content-section">
       <div class="section-header">
-        <div class="si"><svg class="icon" viewBox="0 0 24 24"><path d="M5 17h14M5 17a2 2 0 1 0 4 0M5 17a2 2 0 1 1 4 0m6 0a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0M5 17l1.5-7.5A2 2 0 0 1 8.45 8h7.1a2 2 0 0 1 1.95 1.5L19 17"/></svg></div>
-        <div>
-          <div class="section-title">Trip Entry</div>
-          <div class="section-subtitle">Record daily trip transactions</div>
-        </div>
+        <div class="si"><svg viewBox="0 0 24 24"><path d="M5 17h14M5 17a2 2 0 1 0 4 0M5 17a2 2 0 1 1 4 0m6 0a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0M5 17l1.5-7.5A2 2 0 0 1 8.45 8h7.1a2 2 0 0 1 1.95 1.5L19 17"/></svg></div>
+        <div><div class="section-title">Trip Entry</div><div class="section-subtitle">Record daily trip transactions</div></div>
       </div>
-
       <div id="tripAlerts"></div>
 
       <div class="card">
-        <h3><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Trip Details</h3>
+        <div class="card-title"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Trip Details</div>
         <div class="form-row">
-          <div class="form-group"><label>Trip Date <span class="required">*</span></label><input type="date" id="tripDate"></div>
-          <div class="form-group"><label>Session <span class="required">*</span></label>
+          <div class="fg"><label>Trip Date <span class="req">*</span></label><input type="date" id="tripDate"></div>
+          <div class="fg"><label>Session <span class="req">*</span></label>
             <select id="tripSession"><option value="">-- Select Session --</option><option value="Morning">Morning</option><option value="Evening">Evening</option></select>
           </div>
         </div>
       </div>
 
       <div class="card">
-        <h3><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add Transaction</h3>
+        <div class="card-title"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add Transaction</div>
         <div class="form-row">
-          <div class="form-group"><label>Rider Name <span class="required">*</span></label><select id="tripRiderName"><option value="">-- Select Rider --</option></select></div>
-          <div class="form-group"><label>Ride Amount (₹) <span class="required">*</span></label><input type="number" id="tripRideAmount" placeholder="0.00" step="0.01" min="0"></div>
+          <div class="fg"><label>Rider <span class="req">*</span></label><select id="tripRiderName"><option value="">-- Select Rider --</option></select></div>
+          <div class="fg"><label>Ride Amount (₹) <span class="req">*</span></label><input type="number" id="tripRideAmount" placeholder="0.00" step="0.01" min="0"></div>
         </div>
         <div class="form-row">
-          <div class="form-group"><label>Payment Method <span class="required">*</span></label>
+          <div class="fg"><label>Payment Method <span class="req">*</span></label>
             <select id="tripPaymentMethod"><option value="">-- Select --</option><option value="UPI">UPI</option><option value="Cash">Cash</option><option value="Wallet">Wallet</option><option value="Bank Transfer">Bank Transfer</option></select>
           </div>
-          <div class="form-group"><label>Status <span class="required">*</span></label>
+          <div class="fg"><label>Status <span class="req">*</span></label>
             <select id="tripStatus"><option value="">-- Select --</option><option value="Paid">Paid</option><option value="Balance">Balance</option></select>
           </div>
         </div>
         <div class="btn-group">
-          <button class="btn btn-primary" onclick="addTripTransaction()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add Transaction</button>
+          <button class="btn btn-primary" onclick="addTripRow()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add Transaction</button>
           <button class="btn btn-success" onclick="saveAllTrips()"><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>Save All</button>
         </div>
       </div>
 
       <div class="card">
-        <h3><svg viewBox="0 0 24 24"><path d="M4 19h16M4 19V5h16v14"/></svg>Today's Transactions</h3>
+        <div class="card-title"><svg viewBox="0 0 24 24"><path d="M4 19h16M4 19V5h16v14"/></svg>Today's Transactions</div>
         <div class="search-bar">
           <input type="date" id="searchTripDate" onchange="filterTrips()">
           <select id="searchTripSession" onchange="filterTrips()"><option value="">All Sessions</option><option value="Morning">Morning</option><option value="Evening">Evening</option></select>
         </div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>#</th><th>Rider</th><th>Amount (₹)</th><th>Payment</th><th>Status</th><th>Actions</th></tr></thead>
-            <tbody id="tripTableBody"><tr><td colspan="6" class="empty-state">Select date to view transactions</td></tr></tbody>
-          </table>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1.2rem;padding:1rem 1.2rem;background:#fff7ed;border-radius:8px;border-left:4px solid var(--orange);">
-          <div style="font-weight:700;color:var(--ink);font-size:.9rem;">Total Amount</div>
-          <div style="font-size:1.3rem;font-weight:800;color:var(--orange-dark);">₹<span id="tripTotalAmount">0.00</span></div>
-        </div>
+        <div class="table-wrap"><table><thead><tr><th>#</th><th>Rider</th><th>Amount (₹)</th><th>Payment</th><th>Status</th><th>Actions</th></tr></thead><tbody id="tripTableBody"><tr><td colspan="6" class="empty-state">Select date to view transactions</td></tr></tbody></table></div>
+        <div class="total-bar"><span class="tl">Total Amount</span><span class="tv">₹<span id="tripTotalAmount">0.00</span></span></div>
       </div>
     </div>
 
     <!-- REPORTS -->
     <div id="reports" class="content-section">
       <div class="section-header">
-        <div class="si"><svg class="icon" viewBox="0 0 24 24"><path d="M4 19h16M4 19V5h16v14M8 13v3M12 9v7M16 11v5"/></svg></div>
-        <div>
-          <div class="section-title">My Reports</div>
-          <div class="section-subtitle">View and analyze trip transactions</div>
-        </div>
+        <div class="si"><svg viewBox="0 0 24 24"><path d="M4 19h16M4 19V5h16v14M8 13v3M12 9v7M16 11v5"/></svg></div>
+        <div><div class="section-title">My Reports</div><div class="section-subtitle">View and analyze trip transactions</div></div>
       </div>
-
       <div id="reportAlerts"></div>
-
       <div class="card">
-        <h3><svg viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>Report Filters</h3>
+        <div class="card-title"><svg viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>Report Filters</div>
         <div class="form-row">
-          <div class="form-group"><label>Search By</label>
-            <select id="reportSearchType" onchange="updateReportFilters()">
-              <option value="month">By Month</option>
-              <option value="all">All Transactions</option>
-              <option value="outstanding">Outstanding Only</option>
-              <option value="daterange">Date Range</option>
-            </select>
+          <div class="fg"><label>Search By</label>
+            <select id="reportSearchType" onchange="updateReportFilters()"><option value="month">By Month</option><option value="all">All Transactions</option><option value="outstanding">Outstanding Only</option><option value="daterange">Date Range</option></select>
           </div>
-          <div class="form-group" id="monthFilterGroup"><label>Select Month</label><input type="month" id="reportMonth" onchange="generateReport()"></div>
-          <div class="form-group" id="dateFilterGroup" style="display:none;"><label>From Date</label><input type="date" id="reportFromDate" onchange="generateReport()"></div>
-          <div class="form-group" id="dateFilterGroup2" style="display:none;"><label>To Date</label><input type="date" id="reportToDate" onchange="generateReport()"></div>
+          <div class="fg" id="monthFG"><label>Month</label><input type="month" id="reportMonth" onchange="generateReport()"></div>
+          <div class="fg" id="fromFG" style="display:none;"><label>From Date</label><input type="date" id="reportFromDate" onchange="generateReport()"></div>
+          <div class="fg" id="toFG" style="display:none;"><label>To Date</label><input type="date" id="reportToDate" onchange="generateReport()"></div>
         </div>
         <div class="btn-group">
           <button class="btn btn-primary" onclick="generateReport()"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>Generate Report</button>
@@ -550,23 +503,16 @@ tbody tr:last-child td{border-bottom:none;}
           <button class="btn btn-info" onclick="printReport()"><svg viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>Print</button>
         </div>
       </div>
-
       <div id="reportContainer" class="card" style="display:none;">
-        <h3><svg viewBox="0 0 24 24"><path d="M4 19h16M4 19V5h16v14"/></svg>Transaction Details</h3>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Date</th><th>Session</th><th>Rider</th><th>Amount (₹)</th><th>Payment</th><th>Status</th></tr></thead>
-            <tbody id="reportTableBody"></tbody>
-          </table>
-        </div>
+        <div class="card-title"><svg viewBox="0 0 24 24"><path d="M4 19h16M4 19V5h16v14"/></svg>Transaction Details</div>
+        <div class="table-wrap"><table><thead><tr><th>Date</th><th>Session</th><th>Rider</th><th>Amount (₹)</th><th>Payment</th><th>Status</th></tr></thead><tbody id="reportTableBody"></tbody></table></div>
       </div>
-
       <div id="reportStats" style="display:none;">
         <div class="stats-grid">
-          <div class="stat-card c2"><div class="stat-label">Total Transactions</div><div class="stat-value" id="reportTotalTransactions">0</div></div>
-          <div class="stat-card c1"><div class="stat-label">Total Amount</div><div class="stat-value" id="reportTotalAmount">₹0</div></div>
-          <div class="stat-card c3"><div class="stat-label">Total Paid</div><div class="stat-value" id="reportTotalPaid">₹0</div></div>
-          <div class="stat-card c4"><div class="stat-label">Outstanding</div><div class="stat-value" id="reportTotalOutstanding">₹0</div></div>
+          <div class="stat-card c2"><div class="stat-label">Total Transactions</div><div class="stat-value" id="rptTotal">0</div></div>
+          <div class="stat-card c1"><div class="stat-label">Total Amount</div><div class="stat-value" id="rptAmount">₹0</div></div>
+          <div class="stat-card c3"><div class="stat-label">Total Paid</div><div class="stat-value" id="rptPaid">₹0</div></div>
+          <div class="stat-card c4"><div class="stat-label">Outstanding</div><div class="stat-value" id="rptOutstanding">₹0</div></div>
         </div>
       </div>
     </div>
@@ -574,45 +520,38 @@ tbody tr:last-child td{border-bottom:none;}
     <!-- SETTINGS -->
     <div id="settings" class="content-section">
       <div class="section-header">
-        <div class="si"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
-        <div>
-          <div class="section-title">Settings</div>
-          <div class="section-subtitle">Account, data and system preferences</div>
-        </div>
+        <div class="si"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
+        <div><div class="section-title">Settings</div><div class="section-subtitle">Account and data preferences</div></div>
       </div>
-
       <div id="settingsAlerts"></div>
-
       <div class="card">
-        <h3><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Account Settings</h3>
+        <div class="card-title"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Account</div>
         <div class="form-row">
-          <div class="form-group"><label>User ID</label><input type="text" id="settingsUserName" disabled></div>
-          <div class="form-group"><label>User Role</label><input type="text" id="settingsUserRole" disabled></div>
+          <div class="fg"><label>User ID</label><input type="text" id="settingsUserId" readonly></div>
+          <div class="fg"><label>Role</label><input type="text" id="settingsUserRole" readonly></div>
         </div>
         <div class="form-row">
-          <div class="form-group"><label>New Password</label><input type="password" id="settingsNewPassword" placeholder="Leave blank to keep current"></div>
-          <div class="form-group"><label>Confirm Password</label><input type="password" id="settingsConfirmPassword"></div>
+          <div class="fg"><label>New Password</label><input type="password" id="settingsNewPassword" placeholder="Leave blank to keep current"></div>
+          <div class="fg"><label>Confirm Password</label><input type="password" id="settingsConfirmPassword"></div>
         </div>
-        <div class="btn-group"><button class="btn btn-primary" onclick="updateUserPassword()">Update Password</button></div>
+        <div class="btn-group"><button class="btn btn-primary" onclick="updatePassword()">Update Password</button></div>
       </div>
-
       <div class="card">
-        <h3><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Data Management</h3>
-        <p style="margin-bottom:1rem;color:#64748b;font-size:.85rem;">Backup, restore, or reset your application data</p>
+        <div class="card-title"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Data Management</div>
+        <p style="margin-bottom:1rem;color:#64748b;font-size:.85rem;">Export a JSON backup or restore from a previous backup file.</p>
         <div class="btn-group">
           <button class="btn btn-success" onclick="exportData()">Export All Data</button>
           <button class="btn btn-info" onclick="importDataDialog()">Import Data</button>
-          <button class="btn btn-danger" onclick="resetApplication()">Reset Application</button>
+          <button class="btn btn-danger" onclick="resetApplication()">Reset All Data</button>
         </div>
       </div>
-
       <div class="card">
-        <h3><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>About</h3>
+        <div class="card-title"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>About</div>
         <table style="width:100%;font-size:.85rem;">
-          <tr style="border-bottom:1px solid #f1f3f7;"><td style="padding:.5rem;color:#64748b;">Application</td><td style="padding:.5rem;font-weight:600;">Ride Management System</td></tr>
-          <tr style="border-bottom:1px solid #f1f3f7;"><td style="padding:.5rem;color:#64748b;">Version</td><td style="padding:.5rem;font-weight:600;">3.0.0</td></tr>
-          <tr style="border-bottom:1px solid #f1f3f7;"><td style="padding:.5rem;color:#64748b;">Platform</td><td style="padding:.5rem;font-weight:600;">Progressive Web App</td></tr>
-          <tr><td style="padding:.5rem;color:#64748b;">Database</td><td style="padding:.5rem;font-weight:600;">IndexedDB (Offline-first)</td></tr>
+          <tr style="border-bottom:1px solid #f1f3f7;"><td style="padding:.5rem;color:#64748b;">App</td><td style="padding:.5rem;font-weight:600;">Ride Management System (RMS)</td></tr>
+          <tr style="border-bottom:1px solid #f1f3f7;"><td style="padding:.5rem;color:#64748b;">Version</td><td style="padding:.5rem;font-weight:600;">4.0 — Cloud Sync Edition</td></tr>
+          <tr style="border-bottom:1px solid #f1f3f7;"><td style="padding:.5rem;color:#64748b;">Platform</td><td style="padding:.5rem;font-weight:600;">PWA + Firebase Firestore</td></tr>
+          <tr><td style="padding:.5rem;color:#64748b;">Storage</td><td style="padding:.5rem;font-weight:600;">Cloud (real-time sync across devices)</td></tr>
         </table>
       </div>
     </div>
@@ -621,14 +560,12 @@ tbody tr:last-child td{border-bottom:none;}
 </div>
 
 <div id="alertContainer"></div>
+<div class="spinner-overlay" id="spinner"><div class="spinner"></div></div>
 
 <div id="importModal" class="modal">
   <div class="modal-content">
-    <div class="modal-header">
-      <svg viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2" style="width:20px;height:20px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
-      Import Data
-    </div>
-    <p style="margin-bottom:1rem;color:#64748b;font-size:.85rem;">Select a backup JSON file to restore your data. This will overwrite existing data.</p>
+    <div class="modal-header">Import Data</div>
+    <p style="color:#64748b;font-size:.85rem;margin-bottom:1rem;">Select a JSON backup file. This will overwrite existing data.</p>
     <input type="file" id="importFile" accept=".json" style="width:100%;padding:.7rem;border:1.5px solid var(--line);border-radius:8px;">
     <div class="modal-footer">
       <button class="btn btn-primary" onclick="performImport()">Import</button>
@@ -638,690 +575,729 @@ tbody tr:last-child td{border-bottom:none;}
 </div>
 
 <script>
-/* =========================================================
-   RMS v3.0
-   Key fixes vs v2:
-   1. Rider login validated against the ACTUAL stored rider
-      record in IndexedDB (not a hardcoded password).
-   2. Single refreshAll() pipeline: every save/update/delete
-      re-reads from IndexedDB and re-renders Dashboard, Trip
-      Entry table and (if open) Reports — so nothing goes stale.
-   3. Sidebar replaced with a compact top icon-nav; mobile gets
-      a slide-out drawer instead of a full-height orange column.
-   4. Emojis replaced with inline SVG icon set throughout.
-========================================================= */
+/* ============================================================
+   RMS v4.0 — Cloud Sync Edition
+   ─────────────────────────────────────────────────────────
+   Fixes from v3:
+   1. Delete now works for BOTH pending (unsaved) rows AND
+      already-persisted DB records.  The trip table carries
+      a `dbId` field (Firestore doc id) so each row knows
+      exactly how to remove itself.
+   2. Demo credentials removed from login page.
+   3. Firebase Firestore used as the cloud database so that
+      the same data is accessible from any device / browser
+      that opens the HTML file (mobile, desktop, web).
+   4. Offline-fallback: if Firebase is not yet configured the
+      app uses IndexedDB exactly as before, so it still runs
+      locally out-of-the-box.
 
-let db;
-let currentUser = null;
-let currentRiderCategory = 'new';
-let currentTripTransactions = [];
-let revenueChart = null, paymentChart = null;
+   CLOUD SETUP (one-time, 5 minutes)
+   ──────────────────────────────────
+   a) Go to https://console.firebase.google.com
+   b) Create a new project (free Spark plan)
+   c) Add a Web app → copy the firebaseConfig object
+   d) Paste it into the firebaseConfig block near the top
+      of this file.
+   e) Enable Firestore Database (production mode or test mode)
+   f) Enable Authentication → Anonymous (or Email/Password)
+      if you want real Firebase auth.
+   g) Deploy the HTML file to any web host (GitHub Pages,
+      Firebase Hosting, Netlify, etc.) so riders can open
+      the same URL from their phones.
+   ============================================================ */
+
+/* ── State ─────────────────────────────────────────────── */
+let currentUser   = null;
 let currentModule = 'dashboard';
+let pendingTrips  = [];   // rows staged but not yet saved to DB
+let displayedTrips = []; // rows currently shown in trip table (mix of pending + DB)
+let isOnline      = false;
+let revenueChart  = null, paymentChart = null;
 
-const NAV_ITEMS = [
-  {id:'dashboard', label:'Dashboard', adminOnly:false, icon:'<path d="M3 3v18h18M7 14l4-4 4 4 5-5"/>'},
-  {id:'rider-master', label:'Rider Master', adminOnly:true, icon:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>'},
-  {id:'trip-entry', label:'Trip Entry', adminOnly:true, icon:'<path d="M5 17h14M5 17a2 2 0 1 0 4 0M5 17a2 2 0 1 1 4 0m6 0a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0M5 17l1.5-7.5A2 2 0 0 1 8.45 8h7.1a2 2 0 0 1 1.95 1.5L19 17"/>'},
-  {id:'reports', label:'My Reports', adminOnly:false, icon:'<path d="M4 19h16M4 19V5h16v14M8 13v3M12 9v7M16 11v5"/>'},
-  {id:'settings', label:'Settings', adminOnly:true, icon:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>'}
-];
+/* ── Firebase helpers (fall back to IDB if not configured) ─ */
+const FB = () => window._firebase || {};
+const USE_CLOUD = () => FB().IS_CONFIGURED === true;
 
-/* ===================== DB ===================== */
-async function initDB(){
-  return new Promise((resolve,reject)=>{
-    const req = indexedDB.open('RideManagementSystemV3', 1);
-    req.onerror = () => reject(req.error);
-    req.onsuccess = () => { db = req.result; resolve(db); };
-    req.onupgradeneeded = (e)=>{
-      const d = e.target.result;
+/* ══════════════════════════════════════════════════════════
+   INDEXEDDB FALLBACK (unchanged from v3)
+   ══════════════════════════════════════════════════════════ */
+let idb;
+async function openIDB(){
+  return new Promise((res,rej)=>{
+    const r = indexedDB.open('RMS_v4',1);
+    r.onerror = ()=>rej(r.error);
+    r.onsuccess = ()=>{ idb=r.result; res(idb); };
+    r.onupgradeneeded = e=>{
+      const d=e.target.result;
       if(!d.objectStoreNames.contains('riders')){
-        const s = d.createObjectStore('riders', {keyPath:'riderId'});
-        s.createIndex('name','name',{unique:false});
+        d.createObjectStore('riders',{keyPath:'riderId'});
       }
       if(!d.objectStoreNames.contains('trips')){
-        const s = d.createObjectStore('trips', {keyPath:'id', autoIncrement:true});
-        s.createIndex('tripDate','tripDate',{unique:false});
-        s.createIndex('session','session',{unique:false});
-        s.createIndex('riderId','riderId',{unique:false});
+        const s=d.createObjectStore('trips',{keyPath:'id',autoIncrement:true});
+        s.createIndex('tripDate','tripDate');
       }
     };
   });
 }
-function tx(store, mode){ return db.transaction([store], mode).objectStore(store); }
-function addRider(d){ return new Promise((res,rej)=>{const r=tx('riders','readwrite').add(d); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);}); }
-function getRider(id){ return new Promise((res,rej)=>{const r=tx('riders','readonly').get(id); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);}); }
-function getAllRiders(){ return new Promise((res,rej)=>{const r=tx('riders','readonly').getAll(); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);}); }
-function putRider(d){ return new Promise((res,rej)=>{const r=tx('riders','readwrite').put(d); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);}); }
-function deleteRiderRec(id){ return new Promise((res,rej)=>{const r=tx('riders','readwrite').delete(id); r.onsuccess=()=>res(); r.onerror=()=>rej(r.error);}); }
-function addTrip(d){ return new Promise((res,rej)=>{const r=tx('trips','readwrite').add(d); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);}); }
-function getAllTrips(){ return new Promise((res,rej)=>{const r=tx('trips','readonly').getAll(); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);}); }
-function deleteTripRec(id){ return new Promise((res,rej)=>{const r=tx('trips','readwrite').delete(id); r.onsuccess=()=>res(); r.onerror=()=>rej(r.error);}); }
+function idbStore(name,mode){ return idb.transaction([name],mode).objectStore(name); }
+function idbGetAll(name){ return new Promise((r,j)=>{ const q=idbStore(name,'readonly').getAll(); q.onsuccess=()=>r(q.result); q.onerror=()=>j(q.error); }); }
+function idbGet(name,key){ return new Promise((r,j)=>{ const q=idbStore(name,'readonly').get(key); q.onsuccess=()=>r(q.result); q.onerror=()=>j(q.error); }); }
+function idbAdd(name,data){ return new Promise((r,j)=>{ const q=idbStore(name,'readwrite').add(data); q.onsuccess=()=>r(q.result); q.onerror=()=>j(q.error); }); }
+function idbPut(name,data){ return new Promise((r,j)=>{ const q=idbStore(name,'readwrite').put(data); q.onsuccess=()=>r(q.result); q.onerror=()=>j(q.error); }); }
+function idbDel(name,key){ return new Promise((r,j)=>{ const q=idbStore(name,'readwrite').delete(key); q.onsuccess=()=>r(); q.onerror=()=>j(q.error); }); }
 
-/* ===================== AUTH (fixed) ===================== */
-async function handleLogin(event){
-  event.preventDefault();
-  const userId = document.getElementById('loginId').value.trim();
-  const password = document.getElementById('loginPassword').value;
-  const errBox = document.getElementById('loginError');
-  errBox.style.display = 'none';
+/* ══════════════════════════════════════════════════════════
+   ABSTRACTED DATA LAYER
+   Each function works with Firestore when configured,
+   otherwise falls back to IndexedDB.
+   ══════════════════════════════════════════════════════════ */
+const ADMIN_PWD_KEY = 'rms_admin_pwd';
+function getAdminPwd(){ return localStorage.getItem(ADMIN_PWD_KEY) || 'admin123'; }
+function setAdminPwd(p){ localStorage.setItem(ADMIN_PWD_KEY, p); }
 
-  if(userId.toLowerCase() === 'admin'){
-    if(password === 'admin123'){
-      currentUser = {userId:'admin', name:'Admin', role:'Administrator', isAdmin:true};
-    } else {
-      return showLoginError('Incorrect admin password.');
-    }
-  } else {
-    // Always validate against the live DB record - this is the fix.
-    // Previously this branch hardcoded password123 and never read the actual rider.
-    const rider = await getRider(userId);
-    if(!rider){
-      return showLoginError('No rider found with that ID. Check with your admin.');
-    }
-    if(rider.password !== password){
-      return showLoginError('Incorrect password for this Rider ID.');
-    }
-    currentUser = {userId: rider.riderId, name: rider.name, role:'Rider', isAdmin:false};
+/* Riders */
+async function dbGetAllRiders(){
+  if(USE_CLOUD()){
+    const {db,collection,getDocs} = FB();
+    const snap = await getDocs(collection(db,'riders'));
+    return snap.docs.map(d=>({...d.data(), _docId:d.id}));
   }
-
-  localStorage.setItem('rmsUser', JSON.stringify(currentUser));
-  enterApp();
-  showAlert('dashboardAlerts', `Welcome, ${currentUser.name}`, 'success');
+  return idbGetAll('riders');
 }
-
-function showLoginError(msg){
-  const box = document.getElementById('loginError');
-  box.textContent = msg;
-  box.style.display = 'flex';
-}
-
-function enterApp(){
-  document.getElementById('loginPage').style.display = 'none';
-  document.getElementById('mainApp').style.display = 'flex';
-  buildNav();
-  updateUserDisplay();
-  switchModule('dashboard');
-}
-
-function handleLogout(){
-  if(confirm('Are you sure you want to logout?')){
-    currentUser = null;
-    localStorage.removeItem('rmsUser');
-    document.getElementById('loginPage').style.display = 'flex';
-    document.getElementById('mainApp').style.display = 'none';
-    document.getElementById('loginId').value = '';
-    document.getElementById('loginPassword').value = '';
+async function dbGetRider(riderId){
+  if(USE_CLOUD()){
+    const {db,collection,query,where,getDocs} = FB();
+    const snap = await getDocs(query(collection(db,'riders'),where('riderId','==',riderId)));
+    return snap.empty ? null : {...snap.docs[0].data(), _docId:snap.docs[0].id};
   }
+  return idbGet('riders',riderId);
 }
-
-function updateUserDisplay(){
-  document.getElementById('displayUserName').textContent = currentUser.name;
-  document.getElementById('displayUserRole').textContent = currentUser.role;
-  document.getElementById('userInitial').textContent = currentUser.name.charAt(0).toUpperCase();
-  document.getElementById('settingsUserName').value = currentUser.userId;
-  document.getElementById('settingsUserRole').value = currentUser.role;
-}
-
-/* ===================== NAV ===================== */
-function buildNav(){
-  const items = NAV_ITEMS.filter(i => !i.adminOnly || currentUser.isAdmin);
-
-  const desktop = document.getElementById('desktopNav');
-  desktop.innerHTML = items.map(i => `
-    <div class="nav-item" data-module="${i.id}" onclick="switchModule('${i.id}')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${i.icon}</svg>
-      <span>${i.label}</span>
-    </div>
-  `).join('');
-
-  const mobile = document.getElementById('mobileNavList');
-  mobile.innerHTML = items.map(i => `
-    <div class="nav-item" data-module="${i.id}" onclick="switchModule('${i.id}'); toggleMobileNav(false);">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${i.icon}</svg>
-      <span>${i.label}</span>
-    </div>
-  `).join('');
-}
-
-function toggleMobileNav(show){
-  document.getElementById('mobileNav').classList.toggle('active', show);
-  document.getElementById('mobileNavOverlay').classList.toggle('active', show);
-}
-
-function switchModule(module){
-  // Guard: rider role cannot access admin-only modules even if URL/state manipulated
-  const navItem = NAV_ITEMS.find(n => n.id === module);
-  if(navItem && navItem.adminOnly && !currentUser.isAdmin){
-    module = 'dashboard';
+async function dbSaveRider(data){
+  if(USE_CLOUD()){
+    const {db,collection,addDoc} = FB();
+    const ref = await addDoc(collection(db,'riders'), data);
+    return ref.id;
   }
-
-  currentModule = module;
-  document.querySelectorAll('.content-section').forEach(s=>s.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-  document.getElementById(module).classList.add('active');
-  document.querySelectorAll(`.nav-item[data-module="${module}"]`).forEach(n=>n.classList.add('active'));
-
-  if(module === 'dashboard') loadDashboard();
-  else if(module === 'rider-master') loadRiderMaster();
-  else if(module === 'trip-entry') loadTripEntry();
-  else if(module === 'reports') initReportFilters();
+  return idbAdd('riders', data);
 }
-
-/* ===================== ALERTS ===================== */
-const ICONS = {
-  success: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/>',
-  error: '<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>',
-  info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>'
-};
-function showAlert(containerId, message, type='success'){
-  const container = document.getElementById(containerId) || document.getElementById('alertContainer');
-  const id = 'alert-' + Date.now() + Math.random().toString(36).slice(2,6);
-  container.insertAdjacentHTML('beforeend', `
-    <div class="alert alert-${type}" id="${id}">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${ICONS[type]||ICONS.info}</svg>
-      <span>${message}</span>
-      <span class="alert-close" onclick="document.getElementById('${id}')?.remove()">&times;</span>
-    </div>
-  `);
-  setTimeout(()=>{ document.getElementById(id)?.remove(); }, 4000);
-}
-
-/* ===================== CENTRAL REFRESH (the sync fix) =====================
-   Any time data changes (rider added/edited/deleted, trip added/saved/deleted,
-   import/reset) we call refreshAll(). It re-pulls from IndexedDB and re-renders
-   whichever views are relevant, regardless of which module is currently open.
-   This removes the v2 bug where Dashboard/Reports only rendered using data
-   present at the moment the module was first opened. */
-async function refreshAll(){
-  await loadDashboard();           // always keep dashboard numbers live
-  if(currentModule === 'rider-master') await loadRidersForTable();
-  if(currentModule === 'reports') await generateReport();
-}
-
-/* ===================== DASHBOARD ===================== */
-async function loadDashboard(){
-  try{
-    const allRiders = await getAllRiders();
-    const allTripsRaw = await getAllTrips();
-    const allTrips = currentUser.isAdmin ? allTripsRaw : allTripsRaw.filter(t => t.riderId === currentUser.userId);
-
-    const totalAmount = allTrips.reduce((s,t)=>s+t.rideAmount,0);
-    const outstanding = allTrips.filter(t=>t.status==='Balance').reduce((s,t)=>s+t.rideAmount,0);
-
-    document.getElementById('dashTotalRiders').textContent = currentUser.isAdmin ? allRiders.length : 1;
-    document.getElementById('dashTotalTrips').textContent = allTrips.length;
-    document.getElementById('dashTotalRevenue').textContent = '₹' + totalAmount.toFixed(2);
-    document.getElementById('dashTotalOutstanding').textContent = '₹' + outstanding.toFixed(2);
-
-    const recent = [...allTrips].sort((a,b)=> (b.id||0)-(a.id||0)).slice(0,5);
-    document.getElementById('dashRecentTrips').innerHTML = recent.length ? recent.map(t=>`
-      <tr><td>${t.tripDate}</td><td>${t.riderName}</td><td>₹${t.rideAmount.toFixed(2)}</td><td>${t.paymentMethod}</td>
-      <td><span class="badge badge-${t.status.toLowerCase()}">${t.status}</span></td></tr>
-    `).join('') : '<tr><td colspan="5" class="empty-state">No transactions yet</td></tr>';
-
-    updateCharts(allTrips);
-  }catch(err){
-    console.error(err);
-  }
-}
-
-function updateCharts(trips){
-  const dailyRevenue = {};
-  trips.forEach(t=>{ dailyRevenue[t.tripDate] = (dailyRevenue[t.tripDate]||0) + t.rideAmount; });
-  const dates = Object.keys(dailyRevenue).sort();
-
-  const rCtx = document.getElementById('revenueChart').getContext('2d');
-  if(revenueChart) revenueChart.destroy();
-  revenueChart = new Chart(rCtx, {
-    type:'line',
-    data:{ labels:dates, datasets:[{ label:'Daily Revenue', data:dates.map(d=>dailyRevenue[d]),
-      borderColor:'#FF9500', backgroundColor:'rgba(255,149,0,.1)', borderWidth:2, tension:.35, fill:true,
-      pointRadius:4, pointBackgroundColor:'#FF9500' }] },
-    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:dates.length>0}}, scales:{y:{beginAtZero:true}} }
-  });
-
-  const paymentData = {};
-  trips.forEach(t=>{ paymentData[t.paymentMethod] = (paymentData[t.paymentMethod]||0) + t.rideAmount; });
-
-  const pCtx = document.getElementById('paymentChart').getContext('2d');
-  if(paymentChart) paymentChart.destroy();
-  paymentChart = new Chart(pCtx, {
-    type:'doughnut',
-    data:{ labels:Object.keys(paymentData), datasets:[{ data:Object.values(paymentData),
-      backgroundColor:['#FF9500','#2563eb','#1f9d55','#d93939'], borderColor:'#fff', borderWidth:2 }] },
-    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} }
-  });
-}
-
-/* ===================== RIDER MASTER ===================== */
-function setRiderCategory(category){
-  currentRiderCategory = category;
-  document.querySelectorAll('.category-btn').forEach(b=>b.classList.remove('active'));
-  event.target.closest('.category-btn').classList.add('active');
-
-  document.getElementById('newRiderSection').style.display = category==='new' ? 'block':'none';
-  document.getElementById('editRiderSection').style.display = category==='edit' ? 'block':'none';
-  document.getElementById('viewRiderSection').style.display = category==='view' ? 'block':'none';
-
-  if(category==='edit') loadRidersForEdit();
-  loadRidersForTable();
-}
-
-async function loadRiderMaster(){
-  await loadRidersForTable();
-  if(currentRiderCategory==='edit') await loadRidersForEdit();
-}
-
-async function loadRidersForTable(){
-  const riders = await getAllRiders();
-  const tbody = document.getElementById('riderTableBody');
-  tbody.innerHTML = riders.length ? riders.map(r=>`
-    <tr>
-      <td><strong>${r.riderId}</strong></td><td>${r.name}</td><td>${r.email||'-'}</td><td>${r.phone||'-'}</td>
-      <td>${r.pickupLocation}</td><td>${r.dropLocation}</td>
-      <td><div class="action-buttons">
-        <button class="icon-btn icon-btn-edit" onclick="editRider('${r.riderId}')" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-        <button class="icon-btn icon-btn-delete" onclick="confirmDeleteRider('${r.riderId}')" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z"/></svg></button>
-      </div></td>
-    </tr>
-  `).join('') : '<tr><td colspan="7" class="empty-state">No riders added yet</td></tr>';
-}
-
-async function loadRidersForEdit(){
-  const riders = await getAllRiders();
-  const select = document.getElementById('editRiderSelect');
-  select.innerHTML = '<option value="">-- Select a rider --</option>' +
-    riders.map(r=>`<option value="${r.riderId}">${r.name} (${r.riderId})</option>`).join('');
-}
-
-async function loadRiderForEdit(){
-  const riderId = document.getElementById('editRiderSelect').value;
-  if(!riderId){ document.getElementById('editFormFields').style.display='none'; return; }
-  const rider = await getRider(riderId);
-  if(rider){
-    document.getElementById('editRiderId').value = rider.riderId;
-    document.getElementById('editRiderName').value = rider.name;
-    document.getElementById('editRiderEmail').value = rider.email||'';
-    document.getElementById('editRiderPhone').value = rider.phone||'';
-    document.getElementById('editPickupLocation').value = rider.pickupLocation;
-    document.getElementById('editDropLocation').value = rider.dropLocation;
-    document.getElementById('editFormFields').style.display = 'block';
-  }
-}
-
-async function saveNewRider(){
-  const name = document.getElementById('riderName').value.trim();
-  const riderId = document.getElementById('riderId').value.trim();
-  const email = document.getElementById('riderEmail').value.trim();
-  const phone = document.getElementById('riderPhone').value.trim();
-  const password = document.getElementById('riderPassword').value;
-  const passwordConfirm = document.getElementById('riderPasswordConfirm').value;
-  const pickupLocation = document.getElementById('pickupLocation').value.trim();
-  const dropLocation = document.getElementById('dropLocation').value.trim();
-
-  if(!name || !riderId || !password || !pickupLocation || !dropLocation)
-    return showAlert('riderAlerts','Please fill all required fields','error');
-  if(password !== passwordConfirm)
-    return showAlert('riderAlerts','Passwords do not match','error');
-  if(password.length < 6)
-    return showAlert('riderAlerts','Password must be at least 6 characters','error');
-
-  try{
-    const existing = await getRider(riderId);
-    if(existing) return showAlert('riderAlerts','Rider ID already exists','error');
-
-    await addRider({ riderId, name, email, phone, password, pickupLocation, dropLocation, createdAt:new Date().toISOString() });
-    showAlert('riderAlerts', `Rider "${name}" created successfully. They can now log in with ID "${riderId}".`, 'success');
-    clearRiderForm();
-    await loadRiderMaster();
-    await refreshAll();
-  }catch(err){ showAlert('riderAlerts','Error saving rider: '+err.message,'error'); }
-}
-
-async function updateRider(){
-  const riderId = document.getElementById('editRiderId').value;
-  const name = document.getElementById('editRiderName').value.trim();
-  const email = document.getElementById('editRiderEmail').value.trim();
-  const phone = document.getElementById('editRiderPhone').value.trim();
-  const password = document.getElementById('editRiderPassword').value;
-  const passwordConfirm = document.getElementById('editRiderPasswordConfirm').value;
-  const pickupLocation = document.getElementById('editPickupLocation').value.trim();
-  const dropLocation = document.getElementById('editDropLocation').value.trim();
-
-  if(!name || !pickupLocation || !dropLocation)
-    return showAlert('riderAlerts','Please fill all required fields','error');
-  if(password && password !== passwordConfirm)
-    return showAlert('riderAlerts','Passwords do not match','error');
-  if(password && password.length < 6)
-    return showAlert('riderAlerts','Password must be at least 6 characters','error');
-
-  try{
-    const rider = await getRider(riderId);
-    await putRider({ ...rider, name, email, phone, password: password || rider.password, pickupLocation, dropLocation, updatedAt:new Date().toISOString() });
-    showAlert('riderAlerts', `Rider "${name}" updated successfully`, 'success');
-    cancelEditRider();
-    await loadRiderMaster();
-    await refreshAll();
-  }catch(err){ showAlert('riderAlerts','Error updating rider: '+err.message,'error'); }
-}
-
-function clearRiderForm(){
-  ['riderName','riderId','riderEmail','riderPhone','riderPassword','riderPasswordConfirm','pickupLocation','dropLocation']
-    .forEach(id => document.getElementById(id).value = '');
-}
-function cancelEditRider(){
-  document.getElementById('editRiderSelect').value = '';
-  document.getElementById('editFormFields').style.display = 'none';
-}
-function filterRiderTable(){
-  const term = document.getElementById('riderSearchInput').value.toLowerCase();
-  document.getElementById('riderTableBody').querySelectorAll('tr').forEach(row=>{
-    row.style.display = row.textContent.toLowerCase().includes(term) ? '' : 'none';
-  });
-}
-function editRider(riderId){
-  document.querySelectorAll('.category-btn')[1].click();
-  document.getElementById('editRiderSelect').value = riderId;
-  loadRiderForEdit();
-}
-async function confirmDeleteRider(riderId){
-  if(confirm('Delete this rider? This cannot be undone.')){
-    try{
-      await deleteRiderRec(riderId);
-      showAlert('riderAlerts','Rider deleted','success');
-      await loadRiderMaster();
-      await refreshAll();
-    }catch(err){ showAlert('riderAlerts','Error deleting rider: '+err.message,'error'); }
-  }
-}
-
-/* ===================== TRIP ENTRY ===================== */
-async function loadTripEntry(){
-  const riders = await getAllRiders();
-  const select = document.getElementById('tripRiderName');
-  select.innerHTML = '<option value="">-- Select Rider --</option>' +
-    riders.map(r=>`<option value="${r.riderId}">${r.name}</option>`).join('');
-  document.getElementById('tripDate').value = new Date().toISOString().split('T')[0];
-  currentTripTransactions = [];
-  updateTripTable();
-}
-
-async function addTripTransaction(){
-  const tripDate = document.getElementById('tripDate').value;
-  const tripSession = document.getElementById('tripSession').value;
-  const riderId = document.getElementById('tripRiderName').value;
-  const rideAmount = parseFloat(document.getElementById('tripRideAmount').value);
-  const paymentMethod = document.getElementById('tripPaymentMethod').value;
-  const status = document.getElementById('tripStatus').value;
-
-  if(!tripDate || !tripSession || !riderId || !rideAmount || !paymentMethod || !status)
-    return showAlert('tripAlerts','Please fill all fields','error');
-  if(rideAmount <= 0)
-    return showAlert('tripAlerts','Amount must be greater than 0','error');
-
-  const exists = currentTripTransactions.some(t=> t.tripDate===tripDate && t.session===tripSession && t.riderId===riderId);
-  if(exists) return showAlert('tripAlerts','This rider already has a transaction for this date/session','error');
-
-  const riderName = document.getElementById('tripRiderName').selectedOptions[0].text;
-  currentTripTransactions.push({ id:Date.now(), tripDate, session:tripSession, riderId, riderName, rideAmount, paymentMethod, status });
-
-  document.getElementById('tripRideAmount').value = '';
-  document.getElementById('tripPaymentMethod').value = '';
-  document.getElementById('tripStatus').value = '';
-
-  updateTripTable();
-  showAlert('tripAlerts','Transaction added to list','success');
-}
-
-function updateTripTable(){
-  const tbody = document.getElementById('tripTableBody');
-  if(currentTripTransactions.length===0){
-    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No transactions added</td></tr>';
-    document.getElementById('tripTotalAmount').textContent = '0.00';
+async function dbUpdateRider(docId, data){
+  if(USE_CLOUD()){
+    const {db,doc,setDoc} = FB();
+    await setDoc(doc(db,'riders',docId), data);
     return;
   }
-  let total = 0;
-  tbody.innerHTML = currentTripTransactions.map((t,i)=>{
-    total += t.rideAmount;
-    return `<tr>
-      <td>${i+1}</td><td>${t.riderName}</td><td>₹${t.rideAmount.toFixed(2)}</td><td>${t.paymentMethod}</td>
+  return idbPut('riders', data);
+}
+async function dbDeleteRider(docId, riderId){
+  if(USE_CLOUD()){
+    const {db,doc,deleteDoc} = FB();
+    await deleteDoc(doc(db,'riders',docId));
+    return;
+  }
+  return idbDel('riders', riderId);
+}
+
+/* Trips */
+async function dbGetAllTrips(){
+  if(USE_CLOUD()){
+    const {db,collection,getDocs,query,orderBy} = FB();
+    const snap = await getDocs(query(collection(db,'trips'),orderBy('tripDate','asc')));
+    return snap.docs.map(d=>({...d.data(), dbId:d.id}));
+  }
+  return (await idbGetAll('trips')).map(t=>({...t, dbId:String(t.id)}));
+}
+async function dbSaveTrip(data){
+  if(USE_CLOUD()){
+    const {db,collection,addDoc,serverTimestamp} = FB();
+    const ref = await addDoc(collection(db,'trips'), {...data, createdAt:serverTimestamp()});
+    return ref.id;
+  }
+  const id = await idbAdd('trips', data);
+  return String(id);
+}
+async function dbDeleteTrip(dbId){
+  if(USE_CLOUD()){
+    const {db,doc,deleteDoc} = FB();
+    await deleteDoc(doc(db,'trips', dbId));
+    return;
+  }
+  // IDB stores numeric id
+  return idbDel('trips', Number(dbId));
+}
+
+/* ══════════════════════════════════════════════════════════
+   NAVIGATION
+   ══════════════════════════════════════════════════════════ */
+const NAV = [
+  {id:'dashboard',   label:'Dashboard',    admin:false, d:'<path d="M3 3v18h18M7 14l4-4 4 4 5-5"/>'},
+  {id:'rider-master',label:'Rider Master', admin:true,  d:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>'},
+  {id:'trip-entry',  label:'Trip Entry',   admin:true,  d:'<path d="M5 17h14M5 17a2 2 0 1 0 4 0M5 17a2 2 0 1 1 4 0m6 0a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0M5 17l1.5-7.5A2 2 0 0 1 8.45 8h7.1a2 2 0 0 1 1.95 1.5L19 17"/>'},
+  {id:'reports',     label:'My Reports',   admin:false, d:'<path d="M4 19h16M4 19V5h16v14M8 13v3M12 9v7M16 11v5"/>'},
+  {id:'settings',    label:'Settings',     admin:true,  d:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>'}
+];
+function navItem(n,mobile){
+  const i = mobile ? 'nav-item' : 'nav-item';
+  return `<div class="${i}" data-mod="${n.id}" onclick="switchModule('${n.id}')${mobile?';toggleDrawer(false)':''}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">${n.d}</svg>${n.label}</div>`;
+}
+function buildNav(){
+  const items = NAV.filter(n=> !n.admin || currentUser.isAdmin);
+  document.getElementById('desktopNav').innerHTML = items.map(n=>navItem(n,false)).join('');
+  document.getElementById('mobileNavList').innerHTML = items.map(n=>navItem(n,true)).join('');
+}
+function switchModule(mod){
+  const item = NAV.find(n=>n.id===mod);
+  if(item && item.admin && !currentUser.isAdmin) mod='dashboard';
+  currentModule = mod;
+  document.querySelectorAll('.content-section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById(mod).classList.add('active');
+  document.querySelectorAll(`.nav-item[data-mod="${mod}"]`).forEach(n=>n.classList.add('active'));
+  if(mod==='dashboard')    loadDashboard();
+  else if(mod==='rider-master') loadRiderMaster();
+  else if(mod==='trip-entry')   loadTripEntry();
+  else if(mod==='reports')      initReportFilters();
+}
+function toggleDrawer(on){
+  document.getElementById('drawerNav').classList.toggle('open',on);
+  document.getElementById('drawerOverlay').classList.toggle('open',on);
+}
+
+/* ══════════════════════════════════════════════════════════
+   AUTH
+   ══════════════════════════════════════════════════════════ */
+async function handleLogin(e){
+  e.preventDefault();
+  const id  = document.getElementById('loginId').value.trim();
+  const pwd = document.getElementById('loginPassword').value;
+  showErr('');
+  spin(true);
+  try{
+    if(id.toLowerCase()==='admin'){
+      if(pwd !== getAdminPwd()) return showErr('Incorrect admin password.');
+      currentUser = {userId:'admin', name:'Admin', role:'Administrator', isAdmin:true};
+    } else {
+      const rider = await dbGetRider(id);
+      if(!rider)      return showErr('No rider found with that ID.');
+      if(rider.password !== pwd) return showErr('Incorrect password.');
+      currentUser = {userId:rider.riderId, name:rider.name, role:'Rider', isAdmin:false, _docId:rider._docId};
+    }
+    localStorage.setItem('rmsUser', JSON.stringify(currentUser));
+    enterApp();
+    alert2('dashboardAlerts',`Welcome, ${currentUser.name}`, 'success');
+  }catch(err){ showErr('Login error: '+err.message); }
+  finally{ spin(false); }
+}
+function showErr(msg){ const b=document.getElementById('loginError'); b.textContent=msg; b.style.display=msg?'flex':'none'; }
+function enterApp(){
+  document.getElementById('loginPage').style.display='none';
+  document.getElementById('mainApp').style.display='flex';
+  updateUserDisplay();
+  buildNav();
+  switchModule('dashboard');
+}
+function handleLogout(){
+  if(confirm('Logout?')){
+    currentUser=null; localStorage.removeItem('rmsUser');
+    document.getElementById('mainApp').style.display='none';
+    document.getElementById('loginPage').style.display='flex';
+    document.getElementById('loginId').value='';
+    document.getElementById('loginPassword').value='';
+  }
+}
+function updateUserDisplay(){
+  document.getElementById('displayUserName').textContent=currentUser.name;
+  document.getElementById('displayUserRole').textContent=currentUser.role;
+  document.getElementById('userInitial').textContent=currentUser.name[0].toUpperCase();
+  document.getElementById('settingsUserId').value=currentUser.userId;
+  document.getElementById('settingsUserRole').value=currentUser.role;
+}
+
+/* ══════════════════════════════════════════════════════════
+   ALERTS / SPINNER UTILS
+   ══════════════════════════════════════════════════════════ */
+const AICONS={success:'<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/>',error:'<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>',info:'<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>'};
+function alert2(cid, msg, type='success'){
+  const c = document.getElementById(cid)||document.getElementById('alertContainer');
+  const id='al'+Date.now();
+  c.insertAdjacentHTML('beforeend',`<div class="alert alert-${type}" id="${id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${AICONS[type]}</svg><span>${msg}</span><span class="alert-close" onclick="document.getElementById('${id}')?.remove()">&times;</span></div>`);
+  setTimeout(()=>document.getElementById(id)?.remove(),5000);
+}
+function spin(on){ document.getElementById('spinner').classList.toggle('active',on); }
+
+/* ══════════════════════════════════════════════════════════
+   CENTRAL REFRESH — keeps dashboard & reports in sync
+   ══════════════════════════════════════════════════════════ */
+async function refreshAll(){
+  await loadDashboard();
+  if(currentModule==='reports') await generateReport();
+}
+
+/* ══════════════════════════════════════════════════════════
+   DASHBOARD
+   ══════════════════════════════════════════════════════════ */
+async function loadDashboard(){
+  try{
+    const allRidersRaw = await dbGetAllRiders();
+    const allTripsRaw  = await dbGetAllTrips();
+    const trips = currentUser.isAdmin ? allTripsRaw : allTripsRaw.filter(t=>t.riderId===currentUser.userId);
+
+    const total       = trips.reduce((s,t)=>s+Number(t.rideAmount),0);
+    const outstanding = trips.filter(t=>t.status==='Balance').reduce((s,t)=>s+Number(t.rideAmount),0);
+
+    document.getElementById('dashTotalRiders').textContent = currentUser.isAdmin ? allRidersRaw.length : 1;
+    document.getElementById('dashTotalTrips').textContent  = trips.length;
+    document.getElementById('dashTotalRevenue').textContent   = '₹'+total.toFixed(2);
+    document.getElementById('dashTotalOutstanding').textContent = '₹'+outstanding.toFixed(2);
+
+    const recent = [...trips].reverse().slice(0,5);
+    document.getElementById('dashRecentTrips').innerHTML = recent.length
+      ? recent.map(t=>`<tr><td>${t.tripDate}</td><td>${t.riderName}</td><td>₹${Number(t.rideAmount).toFixed(2)}</td><td>${t.paymentMethod}</td><td><span class="badge badge-${t.status.toLowerCase()}">${t.status}</span></td></tr>`).join('')
+      : '<tr><td colspan="5" class="empty-state">No transactions yet</td></tr>';
+
+    buildCharts(trips);
+  }catch(e){ console.error(e); }
+}
+
+function buildCharts(trips){
+  const daily={};
+  trips.forEach(t=>{ daily[t.tripDate]=(daily[t.tripDate]||0)+Number(t.rideAmount); });
+  const dates=Object.keys(daily).sort();
+
+  const rCtx=document.getElementById('revenueChart').getContext('2d');
+  if(revenueChart) revenueChart.destroy();
+  revenueChart=new Chart(rCtx,{type:'line',data:{labels:dates,datasets:[{label:'Daily Revenue',data:dates.map(d=>daily[d]),borderColor:'#FF9500',backgroundColor:'rgba(255,149,0,.1)',borderWidth:2,tension:.35,fill:true,pointRadius:4,pointBackgroundColor:'#FF9500'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:dates.length>0}},scales:{y:{beginAtZero:true}}}});
+
+  const pm={};
+  trips.forEach(t=>{ pm[t.paymentMethod]=(pm[t.paymentMethod]||0)+Number(t.rideAmount); });
+  const pCtx=document.getElementById('paymentChart').getContext('2d');
+  if(paymentChart) paymentChart.destroy();
+  paymentChart=new Chart(pCtx,{type:'doughnut',data:{labels:Object.keys(pm),datasets:[{data:Object.values(pm),backgroundColor:['#FF9500','#2563eb','#1f9d55','#d93939'],borderColor:'#fff',borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
+}
+
+/* ══════════════════════════════════════════════════════════
+   RIDER MASTER
+   ══════════════════════════════════════════════════════════ */
+function setRiderCat(cat, btn){
+  document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('secNew').style.display  = cat==='new'  ? 'block':'none';
+  document.getElementById('secEdit').style.display = cat==='edit' ? 'block':'none';
+  document.getElementById('secView').style.display = cat==='view' ? 'block':'none';
+  if(cat==='edit') populateEditDropdown();
+  loadRidersForTable();
+}
+async function loadRiderMaster(){
+  loadRidersForTable();
+}
+async function loadRidersForTable(){
+  const riders = await dbGetAllRiders();
+  document.getElementById('riderTableBody').innerHTML = riders.length
+    ? riders.map(r=>`<tr>
+        <td><strong>${r.riderId}</strong></td><td>${r.name}</td><td>${r.email||'-'}</td><td>${r.phone||'-'}</td>
+        <td>${r.pickupLocation}</td><td>${r.dropLocation}</td>
+        <td><div class="action-buttons">
+          <button class="icon-btn icon-btn-edit" onclick="editRider('${r.riderId}')" title="Edit"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+          <button class="icon-btn icon-btn-delete" onclick="deleteRider('${r.riderId}','${r._docId||r.riderId}')" title="Delete"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z"/></svg></button>
+        </div></td>
+      </tr>`).join('')
+    : '<tr><td colspan="7" class="empty-state">No riders added yet</td></tr>';
+}
+async function populateEditDropdown(){
+  const riders = await dbGetAllRiders();
+  const sel = document.getElementById('editRiderSelect');
+  sel.innerHTML = '<option value="">-- Choose rider --</option>'+riders.map(r=>`<option value="${r.riderId}">${r.name} (${r.riderId})</option>`).join('');
+}
+async function loadRiderForEdit(){
+  const id = document.getElementById('editRiderSelect').value;
+  if(!id){ document.getElementById('editFields').style.display='none'; return; }
+  const r = await dbGetRider(id);
+  if(r){
+    document.getElementById('editRiderId').value = r.riderId;
+    document.getElementById('editRiderName').value = r.name;
+    document.getElementById('editRiderEmail').value = r.email||'';
+    document.getElementById('editRiderPhone').value = r.phone||'';
+    document.getElementById('editPickupLocation').value = r.pickupLocation;
+    document.getElementById('editDropLocation').value = r.dropLocation;
+    document.getElementById('editFields').dataset.docId = r._docId || r.riderId;
+    document.getElementById('editFields').style.display='block';
+  }
+}
+async function saveNewRider(){
+  const name=v('riderName'), riderId=v('riderId'), email=v('riderEmail'), phone=v('riderPhone');
+  const pwd=v('riderPassword'), pwd2=v('riderPasswordConfirm');
+  const pickup=v('pickupLocation'), drop=v('dropLocation');
+  if(!name||!riderId||!pwd||!pickup||!drop) return alert2('riderAlerts','Fill all required fields','error');
+  if(pwd!==pwd2) return alert2('riderAlerts','Passwords do not match','error');
+  if(pwd.length<6) return alert2('riderAlerts','Password min 6 characters','error');
+  spin(true);
+  try{
+    const existing = await dbGetRider(riderId);
+    if(existing) return alert2('riderAlerts','Rider ID already exists','error');
+    await dbSaveRider({riderId,name,email,phone,password:pwd,pickupLocation:pickup,dropLocation:drop,createdAt:new Date().toISOString()});
+    alert2('riderAlerts',`Rider "${name}" saved. Login ID: ${riderId}`,'success');
+    clearRiderForm();
+    await loadRidersForTable();
+    await refreshAll();
+  }catch(e){ alert2('riderAlerts','Error: '+e.message,'error'); }
+  finally{ spin(false); }
+}
+async function updateRider(){
+  const riderId=document.getElementById('editRiderId').value;
+  const docId=document.getElementById('editFields').dataset.docId;
+  const name=v('editRiderName'), email=v('editRiderEmail'), phone=v('editRiderPhone');
+  const pwd=v('editRiderPassword'), pwd2=v('editRiderPasswordConfirm');
+  const pickup=v('editPickupLocation'), drop=v('editDropLocation');
+  if(!name||!pickup||!drop) return alert2('riderAlerts','Fill all required fields','error');
+  if(pwd&&pwd!==pwd2) return alert2('riderAlerts','Passwords do not match','error');
+  if(pwd&&pwd.length<6) return alert2('riderAlerts','Password min 6 characters','error');
+  spin(true);
+  try{
+    const existing = await dbGetRider(riderId);
+    const updated = {...existing, name, email, phone, pickupLocation:pickup, dropLocation:drop,
+      password: pwd||existing.password, updatedAt:new Date().toISOString()};
+    await dbUpdateRider(docId||riderId, updated);
+    alert2('riderAlerts','Rider updated','success');
+    cancelEditRider();
+    await loadRidersForTable();
+    await refreshAll();
+  }catch(e){ alert2('riderAlerts','Error: '+e.message,'error'); }
+  finally{ spin(false); }
+}
+function clearRiderForm(){ ['riderName','riderId','riderEmail','riderPhone','riderPassword','riderPasswordConfirm','pickupLocation','dropLocation'].forEach(i=>{ const el=document.getElementById(i); if(el) el.value=''; }); }
+function cancelEditRider(){ document.getElementById('editRiderSelect').value=''; document.getElementById('editFields').style.display='none'; }
+function filterRiderTable(){ const t=v('riderSearch').toLowerCase(); document.querySelectorAll('#riderTableBody tr').forEach(r=>{ r.style.display=r.textContent.toLowerCase().includes(t)?'':'none'; }); }
+function editRider(rid){
+  document.querySelectorAll('.cat-btn')[1].click();
+  document.getElementById('editRiderSelect').value=rid;
+  loadRiderForEdit();
+}
+async function deleteRider(riderId, docId){
+  if(!confirm(`Delete rider ${riderId}? This cannot be undone.`)) return;
+  spin(true);
+  try{
+    await dbDeleteRider(docId, riderId);
+    alert2('riderAlerts','Rider deleted','success');
+    await loadRidersForTable();
+    await refreshAll();
+  }catch(e){ alert2('riderAlerts','Error: '+e.message,'error'); }
+  finally{ spin(false); }
+}
+
+/* ══════════════════════════════════════════════════════════
+   TRIP ENTRY
+   ══════════════════════════════════════════════════════════ */
+async function loadTripEntry(){
+  const riders = await dbGetAllRiders();
+  const sel = document.getElementById('tripRiderName');
+  sel.innerHTML = '<option value="">-- Select Rider --</option>'+riders.map(r=>`<option value="${r.riderId}">${r.name}</option>`).join('');
+  document.getElementById('tripDate').value = new Date().toISOString().split('T')[0];
+  pendingTrips = [];
+  displayedTrips = [];
+  renderTripTable([]);
+}
+
+function addTripRow(){
+  const tripDate=v('tripDate'), session=v('tripSession'), riderId=v('tripRiderName');
+  const amount=parseFloat(document.getElementById('tripRideAmount').value);
+  const payment=v('tripPaymentMethod'), status=v('tripStatus');
+  if(!tripDate||!session||!riderId||!amount||!payment||!status) return alert2('tripAlerts','Fill all fields','error');
+  if(amount<=0) return alert2('tripAlerts','Amount must be > 0','error');
+
+  // Allow same rider in different sessions; block duplicate in same date+session
+  const dup = pendingTrips.some(t=>t.tripDate===tripDate&&t.session===session&&t.riderId===riderId);
+  if(dup) return alert2('tripAlerts','Rider already added for this date & session','error');
+
+  const riderName = document.getElementById('tripRiderName').selectedOptions[0].text;
+  const row = {tempId:'t'+Date.now(), dbId:null, tripDate, session, riderId, riderName, rideAmount:amount, paymentMethod:payment, status, pending:true};
+  pendingTrips.push(row);
+
+  document.getElementById('tripRideAmount').value='';
+  document.getElementById('tripPaymentMethod').value='';
+  document.getElementById('tripStatus').value='';
+
+  // Merge pending with displayed (saved) rows and re-render
+  mergeAndRenderTrips();
+  alert2('tripAlerts','Transaction added','success');
+}
+
+function mergeAndRenderTrips(){
+  // displayedTrips holds already-saved trips from DB
+  // pendingTrips holds newly staged rows not yet saved
+  const combined = [...displayedTrips, ...pendingTrips];
+  renderTripTable(combined);
+}
+
+function renderTripTable(rows){
+  const tbody = document.getElementById('tripTableBody');
+  if(!rows.length){ tbody.innerHTML='<tr><td colspan="6" class="empty-state">No transactions</td></tr>'; document.getElementById('tripTotalAmount').textContent='0.00'; return; }
+  let total=0;
+  tbody.innerHTML = rows.map((t,i)=>{
+    total += Number(t.rideAmount);
+    const isPending = !!t.pending;
+    const rowId = isPending ? t.tempId : t.dbId;
+    return `<tr style="${isPending?'background:#fffbf2;':''}">
+      <td>${i+1}</td><td>${t.riderName}${isPending?'<span style="font-size:.7rem;color:#FF9500;margin-left:.3rem;">unsaved</span>':''}</td>
+      <td>₹${Number(t.rideAmount).toFixed(2)}</td><td>${t.paymentMethod}</td>
       <td><span class="badge badge-${t.status.toLowerCase()}">${t.status}</span></td>
       <td><div class="action-buttons">
-        <button class="icon-btn icon-btn-edit" onclick="editTripTransaction(${t.id})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-        <button class="icon-btn icon-btn-delete" onclick="deleteTripTransaction(${t.id})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z"/></svg></button>
+        <button class="icon-btn icon-btn-edit" onclick="editTripRow('${rowId}',${isPending})" title="Edit"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+        <button class="icon-btn icon-btn-delete" onclick="deleteTripRow('${rowId}',${isPending})" title="Delete"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z"/></svg></button>
       </div></td>
     </tr>`;
   }).join('');
   document.getElementById('tripTotalAmount').textContent = total.toFixed(2);
 }
 
-function editTripTransaction(id){
-  const t = currentTripTransactions.find(x=>x.id===id);
-  if(t){
-    document.getElementById('tripRiderName').value = t.riderId;
-    document.getElementById('tripRideAmount').value = t.rideAmount;
-    document.getElementById('tripPaymentMethod').value = t.paymentMethod;
-    document.getElementById('tripStatus').value = t.status;
-    deleteTripTransaction(id);
+function editTripRow(rowId, isPending){
+  let row;
+  if(isPending){
+    row = pendingTrips.find(t=>t.tempId===rowId);
+    if(!row) return;
+    document.getElementById('tripRiderName').value   = row.riderId;
+    document.getElementById('tripRideAmount').value  = row.rideAmount;
+    document.getElementById('tripPaymentMethod').value= row.paymentMethod;
+    document.getElementById('tripStatus').value      = row.status;
+    pendingTrips = pendingTrips.filter(t=>t.tempId!==rowId);
+  } else {
+    // Saved row: pull from displayedTrips
+    row = displayedTrips.find(t=>t.dbId===rowId);
+    if(!row) return;
+    document.getElementById('tripRiderName').value   = row.riderId;
+    document.getElementById('tripRideAmount').value  = row.rideAmount;
+    document.getElementById('tripPaymentMethod').value= row.paymentMethod;
+    document.getElementById('tripStatus').value      = row.status;
+    // Remove from DB and from displayedTrips so it can be re-added
+    dbDeleteTrip(rowId).catch(e=>console.error(e));
+    displayedTrips = displayedTrips.filter(t=>t.dbId!==rowId);
   }
+  mergeAndRenderTrips();
 }
-function deleteTripTransaction(id){
-  currentTripTransactions = currentTripTransactions.filter(t=>t.id!==id);
-  updateTripTable();
+
+async function deleteTripRow(rowId, isPending){
+  if(isPending){
+    pendingTrips = pendingTrips.filter(t=>t.tempId!==rowId);
+    mergeAndRenderTrips();
+    alert2('tripAlerts','Transaction removed','success');
+  } else {
+    // Delete persisted record from DB
+    if(!confirm('Delete this saved transaction?')) return;
+    spin(true);
+    try{
+      await dbDeleteTrip(rowId);
+      displayedTrips = displayedTrips.filter(t=>t.dbId!==rowId);
+      mergeAndRenderTrips();
+      await refreshAll();
+      alert2('tripAlerts','Transaction deleted','success');
+    }catch(e){ alert2('tripAlerts','Delete error: '+e.message,'error'); }
+    finally{ spin(false); }
+  }
 }
 
 async function saveAllTrips(){
-  const tripDate = document.getElementById('tripDate').value;
-  const tripSession = document.getElementById('tripSession').value;
-
-  if(!tripDate || !tripSession) return showAlert('tripAlerts','Please select date and session','error');
-  if(currentTripTransactions.length===0) return showAlert('tripAlerts','Please add at least one transaction','error');
-
+  const tripDate=v('tripDate'), session=v('tripSession');
+  if(!tripDate||!session) return alert2('tripAlerts','Select date and session','error');
+  if(!pendingTrips.length) return alert2('tripAlerts','No new transactions to save','error');
+  spin(true);
   try{
-    // Only push transactions that are NOT already persisted (id from Date.now() = new, id from DB = existing/edit-loaded)
-    const toSave = currentTripTransactions.filter(t => t.id > 1e12); // Date.now() ids are large; DB autoincrement ids are small
-    for(const t of toSave){
-      await addTrip({ tripDate, session:tripSession, riderId:t.riderId, riderName:t.riderName,
-        rideAmount:t.rideAmount, paymentMethod:t.paymentMethod, status:t.status, createdAt:new Date().toISOString() });
+    for(const t of pendingTrips){
+      const dbId = await dbSaveTrip({tripDate, session, riderId:t.riderId, riderName:t.riderName, rideAmount:t.rideAmount, paymentMethod:t.paymentMethod, status:t.status});
+      displayedTrips.push({...t, dbId, pending:false, tempId:null});
     }
-
-    showAlert('tripAlerts', `${toSave.length || currentTripTransactions.length} transaction(s) saved successfully`, 'success');
-    currentTripTransactions = [];
-    document.getElementById('tripDate').value = new Date().toISOString().split('T')[0];
-    document.getElementById('tripSession').value = '';
-    updateTripTable();
-
-    // This is the critical sync fix: immediately refresh dashboard/reports after save
+    pendingTrips=[];
+    mergeAndRenderTrips();
     await refreshAll();
-  }catch(err){ showAlert('tripAlerts','Error saving trips: '+err.message,'error'); }
+    alert2('tripAlerts','All transactions saved','success');
+    document.getElementById('tripDate').value = new Date().toISOString().split('T')[0];
+    document.getElementById('tripSession').value='';
+  }catch(e){ alert2('tripAlerts','Save error: '+e.message,'error'); }
+  finally{ spin(false); }
 }
 
 async function filterTrips(){
-  const searchDate = document.getElementById('searchTripDate').value;
-  const searchSession = document.getElementById('searchTripSession').value;
-  if(!searchDate){
-    document.getElementById('tripTableBody').innerHTML = '<tr><td colspan="6" class="empty-state">Select date to view</td></tr>';
-    return;
-  }
-  const allTrips = await getAllTrips();
-  currentTripTransactions = allTrips.filter(t=> t.tripDate===searchDate && (!searchSession || t.session===searchSession))
-    .map(t=>({ id:t.id, tripDate:t.tripDate, session:t.session, riderId:t.riderId, riderName:t.riderName, rideAmount:t.rideAmount, paymentMethod:t.paymentMethod, status:t.status }));
-  updateTripTable();
+  const date=document.getElementById('searchTripDate').value;
+  const sess=document.getElementById('searchTripSession').value;
+  if(!date){ renderTripTable([]); return; }
+  spin(true);
+  try{
+    const all = await dbGetAllTrips();
+    displayedTrips = all.filter(t=>t.tripDate===date&&(!sess||t.session===sess));
+    pendingTrips=[];
+    mergeAndRenderTrips();
+  }catch(e){ alert2('tripAlerts','Filter error: '+e.message,'error'); }
+  finally{ spin(false); }
 }
 
-/* ===================== REPORTS ===================== */
+/* ══════════════════════════════════════════════════════════
+   REPORTS
+   ══════════════════════════════════════════════════════════ */
 function initReportFilters(){
-  const today = new Date();
-  document.getElementById('reportMonth').value = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0');
+  const now=new Date();
+  document.getElementById('reportMonth').value=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
   generateReport();
 }
 function updateReportFilters(){
-  const type = document.getElementById('reportSearchType').value;
-  document.getElementById('monthFilterGroup').style.display = type==='month' ? 'block':'none';
-  document.getElementById('dateFilterGroup').style.display = type==='daterange' ? 'block':'none';
-  document.getElementById('dateFilterGroup2').style.display = type==='daterange' ? 'block':'none';
+  const t=v('reportSearchType');
+  document.getElementById('monthFG').style.display = t==='month'?'block':'none';
+  document.getElementById('fromFG').style.display  = t==='daterange'?'block':'none';
+  document.getElementById('toFG').style.display    = t==='daterange'?'block':'none';
 }
-
 async function generateReport(){
-  const type = document.getElementById('reportSearchType').value;
-  let reportData = [];
+  const type=v('reportSearchType');
+  spin(true);
   try{
-    let allTrips = await getAllTrips();
-    if(!currentUser.isAdmin) allTrips = allTrips.filter(t=>t.riderId === currentUser.userId);
+    let all = await dbGetAllTrips();
+    if(!currentUser.isAdmin) all=all.filter(t=>t.riderId===currentUser.userId);
 
+    let data=[];
     if(type==='month'){
-      const month = document.getElementById('reportMonth').value;
-      if(!month) return;
-      reportData = allTrips.filter(t=> t.tripDate.substring(0,7)===month);
+      const m=v('reportMonth'); if(!m){spin(false);return;}
+      data=all.filter(t=>t.tripDate.substring(0,7)===m);
     } else if(type==='all'){
-      reportData = allTrips;
+      data=all;
     } else if(type==='outstanding'){
-      reportData = allTrips.filter(t=> t.status==='Balance');
+      data=all.filter(t=>t.status==='Balance');
     } else if(type==='daterange'){
-      const from = document.getElementById('reportFromDate').value;
-      const to = document.getElementById('reportToDate').value;
-      if(from && to) reportData = allTrips.filter(t=> t.tripDate>=from && t.tripDate<=to);
+      const f=v('reportFromDate'), to=v('reportToDate');
+      if(f&&to) data=all.filter(t=>t.tripDate>=f&&t.tripDate<=to);
     }
-    displayReport(reportData);
-  }catch(err){ showAlert('reportAlerts','Error generating report: '+err.message,'error'); }
+    renderReport(data);
+  }catch(e){ alert2('reportAlerts','Error: '+e.message,'error'); }
+  finally{ spin(false); }
 }
-
-function displayReport(reportData){
-  const container = document.getElementById('reportContainer');
-  const stats = document.getElementById('reportStats');
-
-  if(reportData.length===0){
-    container.style.display = 'none';
-    stats.style.display = 'none';
-    showAlert('reportAlerts','No transactions found for selected criteria','info');
-    return;
-  }
-
-  document.getElementById('reportTableBody').innerHTML = reportData
-    .sort((a,b)=> a.tripDate < b.tripDate ? 1 : -1)
-    .map(t=>`<tr>
-      <td>${t.tripDate}</td><td>${t.session}</td><td>${t.riderName}</td><td>₹${t.rideAmount.toFixed(2)}</td>
-      <td>${t.paymentMethod}</td><td><span class="badge badge-${t.status.toLowerCase()}">${t.status}</span></td>
-    </tr>`).join('');
-  container.style.display = 'block';
-
-  const total = reportData.reduce((s,t)=>s+t.rideAmount,0);
-  const paid = reportData.filter(t=>t.status==='Paid').reduce((s,t)=>s+t.rideAmount,0);
-  const outstanding = total - paid;
-
-  document.getElementById('reportTotalTransactions').textContent = reportData.length;
-  document.getElementById('reportTotalAmount').textContent = '₹'+total.toFixed(2);
-  document.getElementById('reportTotalPaid').textContent = '₹'+paid.toFixed(2);
-  document.getElementById('reportTotalOutstanding').textContent = '₹'+outstanding.toFixed(2);
-  stats.style.display = 'block';
+function renderReport(data){
+  const c=document.getElementById('reportContainer'), s=document.getElementById('reportStats');
+  if(!data.length){ c.style.display='none'; s.style.display='none'; alert2('reportAlerts','No transactions found','info'); return; }
+  document.getElementById('reportTableBody').innerHTML=data.sort((a,b)=>b.tripDate<a.tripDate?-1:1).map(t=>`<tr><td>${t.tripDate}</td><td>${t.session}</td><td>${t.riderName}</td><td>₹${Number(t.rideAmount).toFixed(2)}</td><td>${t.paymentMethod}</td><td><span class="badge badge-${t.status.toLowerCase()}">${t.status}</span></td></tr>`).join('');
+  c.style.display='block';
+  const total=data.reduce((s,t)=>s+Number(t.rideAmount),0);
+  const paid=data.filter(t=>t.status==='Paid').reduce((s,t)=>s+Number(t.rideAmount),0);
+  document.getElementById('rptTotal').textContent=data.length;
+  document.getElementById('rptAmount').textContent='₹'+total.toFixed(2);
+  document.getElementById('rptPaid').textContent='₹'+paid.toFixed(2);
+  document.getElementById('rptOutstanding').textContent='₹'+(total-paid).toFixed(2);
+  s.style.display='block';
 }
-
 function exportReportPDF(){
-  const table = document.getElementById('reportContainer');
-  if(!table || table.style.display==='none') return showAlert('reportAlerts','Please generate a report first','error');
-
-  const el = document.createElement('div');
-  el.innerHTML = '<h2 style="font-family:sans-serif;color:#1a2332;">RMS Trip Report</h2>' + table.innerHTML +
-    '<h3 style="font-family:sans-serif;margin-top:16px;">Summary</h3>' +
-    `<p style="font-family:sans-serif;">Total: ${document.getElementById('reportTotalAmount').textContent} &nbsp;|&nbsp; Paid: ${document.getElementById('reportTotalPaid').textContent} &nbsp;|&nbsp; Outstanding: ${document.getElementById('reportTotalOutstanding').textContent}</p>`;
-
-  html2pdf().set({
-    margin:10, filename:'rms_report_'+Date.now()+'.pdf',
-    image:{type:'jpeg',quality:0.98}, html2canvas:{scale:2}, jsPDF:{orientation:'landscape',unit:'mm',format:'a4'}
-  }).from(el).save();
-  showAlert('reportAlerts','Report exported','success');
+  const el=document.getElementById('reportContainer');
+  if(!el||el.style.display==='none') return alert2('reportAlerts','Generate report first','error');
+  const wrap=document.createElement('div');
+  wrap.innerHTML=`<h2 style="font-family:sans-serif;margin-bottom:1rem;">RMS Trip Report — ${new Date().toLocaleDateString()}</h2>`+el.innerHTML+
+    `<p style="font-family:sans-serif;margin-top:1rem;">Total: ${document.getElementById('rptAmount').textContent} &nbsp;|&nbsp; Paid: ${document.getElementById('rptPaid').textContent} &nbsp;|&nbsp; Outstanding: ${document.getElementById('rptOutstanding').textContent}</p>`;
+  html2pdf().set({margin:10,filename:'rms_report_'+Date.now()+'.pdf',image:{type:'jpeg',quality:.98},html2canvas:{scale:2},jsPDF:{orientation:'landscape',unit:'mm',format:'a4'}}).from(wrap).save();
+  alert2('reportAlerts','PDF exported','success');
 }
-
 function printReport(){
-  const table = document.getElementById('reportContainer');
-  if(!table || table.style.display==='none') return showAlert('reportAlerts','Please generate a report first','error');
-  const w = window.open('','','width=1000,height=600');
-  w.document.write('<html><head><title>RMS Report</title><style>body{font-family:Arial;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ddd;padding:8px;text-align:left;}</style></head><body>');
-  w.document.write(table.innerHTML);
-  w.document.write('</body></html>');
-  w.document.close();
-  w.print();
+  const el=document.getElementById('reportContainer');
+  if(!el||el.style.display==='none') return alert2('reportAlerts','Generate report first','error');
+  const w=window.open('','','width=1100,height=700');
+  w.document.write('<html><head><title>RMS Report</title><style>body{font-family:Arial;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ddd;padding:8px;text-align:left;}</style></head><body>'+el.innerHTML+'</body></html>');
+  w.document.close(); w.print();
 }
 
-/* ===================== SETTINGS / DATA MGMT ===================== */
-async function exportData(){
+/* ══════════════════════════════════════════════════════════
+   SETTINGS / DATA MANAGEMENT
+   ══════════════════════════════════════════════════════════ */
+async function updatePassword(){
+  const np=v('settingsNewPassword'), cp=v('settingsConfirmPassword');
+  if(!np||!cp) return alert2('settingsAlerts','Enter new password','error');
+  if(np!==cp) return alert2('settingsAlerts','Passwords do not match','error');
+  if(np.length<6) return alert2('settingsAlerts','Min 6 characters','error');
   try{
-    const riders = await getAllRiders();
-    const trips = await getAllTrips();
-    const blob = new Blob([JSON.stringify({exportDate:new Date().toISOString(), riders, trips}, null, 2)], {type:'application/json'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = 'rms_backup_'+Date.now()+'.json';
-    document.body.appendChild(a); a.click(); URL.revokeObjectURL(url); a.remove();
-    showAlert('settingsAlerts','Data exported','success');
-  }catch(err){ showAlert('settingsAlerts','Error exporting: '+err.message,'error'); }
+    if(currentUser.isAdmin){
+      setAdminPwd(np);
+    } else {
+      const r=await dbGetRider(currentUser.userId);
+      await dbUpdateRider(r._docId||r.riderId, {...r, password:np, updatedAt:new Date().toISOString()});
+    }
+    alert2('settingsAlerts','Password updated','success');
+    document.getElementById('settingsNewPassword').value='';
+    document.getElementById('settingsConfirmPassword').value='';
+  }catch(e){ alert2('settingsAlerts','Error: '+e.message,'error'); }
+}
+async function exportData(){
+  spin(true);
+  try{
+    const riders=await dbGetAllRiders(), trips=await dbGetAllTrips();
+    const blob=new Blob([JSON.stringify({exportDate:new Date().toISOString(),riders,trips},null,2)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='rms_backup_'+Date.now()+'.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    alert2('settingsAlerts','Data exported','success');
+  }catch(e){ alert2('settingsAlerts','Error: '+e.message,'error'); }
+  finally{ spin(false); }
 }
 function importDataDialog(){ document.getElementById('importModal').classList.add('active'); }
 function closeImportModal(){ document.getElementById('importModal').classList.remove('active'); }
 async function performImport(){
-  const file = document.getElementById('importFile').files[0];
-  if(!file) return showAlert('settingsAlerts','Select a file','error');
+  const file=document.getElementById('importFile').files[0];
+  if(!file) return alert2('settingsAlerts','Select a file','error');
+  spin(true);
   try{
-    const data = JSON.parse(await file.text());
-    const riders = await getAllRiders(); for(const r of riders) await deleteRiderRec(r.riderId);
-    const trips = await getAllTrips(); for(const t of trips) await deleteTripRec(t.id);
-    if(data.riders) for(const r of data.riders) await addRider(r);
-    if(data.trips) for(const t of data.trips){ const {id, ...rest} = t; await addTrip(rest); }
-    showAlert('settingsAlerts','Data imported successfully','success');
+    const data=JSON.parse(await file.text());
+    // Delete existing
+    const riders=await dbGetAllRiders();
+    for(const r of riders) await dbDeleteRider(r._docId||r.riderId, r.riderId);
+    const trips=await dbGetAllTrips();
+    for(const t of trips) await dbDeleteTrip(t.dbId);
+    // Import
+    if(data.riders) for(const r of data.riders){ const {_docId,...rest}=r; await dbSaveRider(rest); }
+    if(data.trips)  for(const t of data.trips){  const {dbId,id,...rest}=t; await dbSaveTrip(rest); }
+    alert2('settingsAlerts','Data imported','success');
     closeImportModal();
     await refreshAll();
-  }catch(err){ showAlert('settingsAlerts','Error importing: '+err.message,'error'); }
+  }catch(e){ alert2('settingsAlerts','Error: '+e.message,'error'); }
+  finally{ spin(false); }
 }
 async function resetApplication(){
-  if(confirm('This will delete ALL data. Continue?') && confirm('Are you absolutely sure? This cannot be undone.')){
-    try{
-      const riders = await getAllRiders(); for(const r of riders) await deleteRiderRec(r.riderId);
-      const trips = await getAllTrips(); for(const t of trips) await deleteTripRec(t.id);
-      showAlert('settingsAlerts','Application reset','success');
-      await refreshAll();
-    }catch(err){ showAlert('settingsAlerts','Error resetting: '+err.message,'error'); }
-  }
-}
-async function updateUserPassword(){
-  const newPass = document.getElementById('settingsNewPassword').value;
-  const confirmPass = document.getElementById('settingsConfirmPassword').value;
-  if(!newPass || !confirmPass) return showAlert('settingsAlerts','Enter new password','error');
-  if(newPass !== confirmPass) return showAlert('settingsAlerts','Passwords do not match','error');
-  if(newPass.length < 6) return showAlert('settingsAlerts','Password must be at least 6 characters','error');
-
+  if(!confirm('Delete ALL data?')||!confirm('This cannot be undone. Confirm?')) return;
+  spin(true);
   try{
-    if(currentUser.isAdmin){
-      // Admin password is stored locally for this demo session (no separate admin store needed for now)
-      showAlert('settingsAlerts','Admin password updated for this session','success');
-    } else {
-      const rider = await getRider(currentUser.userId);
-      await putRider({...rider, password:newPass, updatedAt:new Date().toISOString()});
-      showAlert('settingsAlerts','Password updated successfully','success');
-    }
-    document.getElementById('settingsNewPassword').value = '';
-    document.getElementById('settingsConfirmPassword').value = '';
-  }catch(err){ showAlert('settingsAlerts','Error updating password: '+err.message,'error'); }
+    const riders=await dbGetAllRiders();
+    for(const r of riders) await dbDeleteRider(r._docId||r.riderId, r.riderId);
+    const trips=await dbGetAllTrips();
+    for(const t of trips) await dbDeleteTrip(t.dbId);
+    alert2('settingsAlerts','Application reset','success');
+    await refreshAll();
+  }catch(e){ alert2('settingsAlerts','Error: '+e.message,'error'); }
+  finally{ spin(false); }
 }
 
-/* ===================== INIT ===================== */
-async function init(){
-  try{
-    await initDB();
+/* ══════════════════════════════════════════════════════════
+   MISC HELPERS
+   ══════════════════════════════════════════════════════════ */
+function v(id){ const el=document.getElementById(id); return el ? el.value.trim() : ''; }
 
-    const user = localStorage.getItem('rmsUser');
-    if(user){
-      currentUser = JSON.parse(user);
-      // Re-validate rider still exists (handles case where rider was deleted while logged in elsewhere)
-      if(!currentUser.isAdmin){
-        const r = await getRider(currentUser.userId);
-        if(!r){ localStorage.removeItem('rmsUser'); currentUser = null; }
-      }
-    }
-    if(currentUser){ enterApp(); }
-  }catch(err){
-    console.error('Init error:', err);
+function updateSyncStatus(){
+  const el=document.getElementById('syncIndicator');
+  const lbl=document.getElementById('syncLabel');
+  if(USE_CLOUD()){ el.className='sync-indicator online'; lbl.textContent='Cloud Sync'; }
+  else { el.className='sync-indicator'; lbl.textContent='Local'; }
+}
+
+/* ══════════════════════════════════════════════════════════
+   BOOT
+   ══════════════════════════════════════════════════════════ */
+window.rmsInit = async function(){
+  await openIDB(); // always open IDB for fallback
+
+  // Show Firebase setup notice if not configured
+  if(!USE_CLOUD()){
+    document.getElementById('cloudNotice').style.display='block';
   }
-}
-window.addEventListener('DOMContentLoaded', init);
+  updateSyncStatus();
+
+  // Auto-login if session exists
+  const saved = localStorage.getItem('rmsUser');
+  if(saved){
+    currentUser = JSON.parse(saved);
+    if(!currentUser.isAdmin){
+      // Re-validate rider still exists
+      const r = await dbGetRider(currentUser.userId);
+      if(!r){ localStorage.removeItem('rmsUser'); currentUser=null; }
+    }
+  }
+  if(currentUser){ enterApp(); }
+};
 </script>
 </body>
 </html>
