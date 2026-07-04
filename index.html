@@ -10,55 +10,106 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="RMS">
 
-<!-- Firebase SDK -->
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-  import {
-    getFirestore, collection, doc, getDoc, getDocs, addDoc, setDoc,
-    updateDoc, deleteDoc, query, where, orderBy, onSnapshot, serverTimestamp
-  } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
-  import {
-    getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged,
-    createUserWithEmailAndPassword
-  } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+<!-- Google Apps Script API layer -->
+<script>
+/* ============================================================
+   API LAYER — the ONLY code in this file that talks to the
+   Google Apps Script backend. Everything else (rms_v4.html's
+   UI logic) calls window.API.* and never touches fetch() or
+   the Apps Script URL directly.
+   ------------------------------------------------------------
+   SETUP: paste your deployed Apps Script Web App URL below
+   (Deploy → New deployment → Web app → Execute as: Me →
+   Who has access: Anyone). It looks like:
+   https://script.google.com/macros/s/XXXXXXXX/exec
+   ============================================================ */
+const APPS_SCRIPT_URL = 'PASTE_YOUR_DEPLOYED_APPS_SCRIPT_WEB_APP_URL_HERE';
 
-  // ── FIREBASE CONFIG ──────────────────────────────────────────────────────
-  // Replace these values with your own Firebase project config.
-  // Steps: https://firebase.google.com/docs/web/setup
-  // Free tier (Spark plan) is sufficient for this app.
-  const firebaseConfig = {
+function apiIsConfigured(){
+  return typeof APPS_SCRIPT_URL === 'string' && APPS_SCRIPT_URL.indexOf('https://script.google.com') === 0;
+}
 
-    apiKey: "AIzaSyD0zJjM-GAJw7T_Aehi6smf1WiJLIASI0U",
-    authDomain: "ride-management-system-7f299.firebaseapp.com",
-    projectId: "ride-management-system-7f299",
-    storageBucket: "ride-management-system-7f299.appspot.com",
-    messagingSenderId: "408147683778",
-    appId: "1:408147683778:web:180ef4ce6563ccdfc90e5b"
+function cleanParams(params){
+  const out = {};
+  Object.keys(params || {}).forEach(k=>{
+    const val = params[k];
+    if(val !== undefined && val !== null && val !== '') out[k] = val;
+  });
+  return out;
+}
 
+/* Every request is retried once on failure before surfacing an
+   error, per the "retry failed requests once" requirement. */
+async function apiCall(action, params, method){
+  const p = cleanParams(params);
+  const doFetch = async () => {
+    if(method === 'POST'){
+      const res = await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids CORS preflight on Apps Script
+        body: JSON.stringify({ action, data: p })
+      });
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      return res.json();
+    }
+    const qs = new URLSearchParams({ action, ...p }).toString();
+    const res = await fetch(`${APPS_SCRIPT_URL}?${qs}`, { method: 'GET' });
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    return res.json();
   };
-
-  // ─────────────────────────────────────────────────────────────────────────
-
-  const IS_CONFIGURED = !firebaseConfig.apiKey.includes("YOUR_");
-
-  let app, db, auth;
-  if (IS_CONFIGURED) {
-    app  = initializeApp(firebaseConfig);
-    db   = getFirestore(app);
-    auth = getAuth(app);
+  try{
+    return await doFetch();
+  }catch(err){
+    try{
+      return await doFetch(); // one retry
+    }catch(err2){
+      return { success:false, message: 'Network error: '+err2.message };
+    }
   }
+}
 
-  // Expose to global scope so non-module scripts can call them
-  window._firebase = {
-    IS_CONFIGURED,
-    db, auth,
-    collection, doc, getDoc, getDocs, addDoc, setDoc,
-    updateDoc, deleteDoc, query, where, orderBy, onSnapshot, serverTimestamp,
-    signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword
-  };
+window.API = {
+  isConfigured: apiIsConfigured,
 
-  // Boot the app once Firebase is ready
-  window.addEventListener("DOMContentLoaded", () => window.rmsInit());
+  login:            (userId, password)          => apiCall('login', { userId, password }, 'POST'),
+  logout:           ()                            => Promise.resolve({ success:true }),
+  changePassword:   (userId, isAdmin, newPassword)=> apiCall('changePassword', { userId, isAdmin, newPassword }, 'POST'),
+
+  getDashboard:     (isAdmin, userId)             => apiCall('dashboard', { isAdmin, userId }, 'GET'),
+
+  getSettings:      ()                            => apiCall('getSettings', {}, 'GET'),
+  updateSettings:   (key, value)                  => apiCall('updateSettings', { key, value }, 'POST'),
+
+  getRiders:        ()                            => apiCall('getRiders', {}, 'GET'),
+  getRider:         (riderId)                     => apiCall('getRider', { riderId }, 'GET'),
+  addRider:         (data)                        => apiCall('addRider', data, 'POST'),
+  updateRider:      (data)                        => apiCall('updateRider', data, 'POST'),
+  deleteRider:      (riderId)                     => apiCall('deleteRider', { riderId }, 'POST'),
+
+  getTrips:         (opts)                        => apiCall('getTrips', opts || {}, 'GET'),
+  getTrip:          (tripId)                      => apiCall('getTrip', { tripId }, 'GET'),
+  addTrip:          (data)                        => apiCall('addTrip', data, 'POST'),
+  updateTrip:       (data)                        => apiCall('updateTrip', data, 'POST'),
+  deleteTrip:       (tripId)                      => apiCall('deleteTrip', { tripId }, 'POST'),
+
+  getPayments:      (opts)                        => apiCall('getPayments', opts || {}, 'GET'),
+  addPayment:       (data)                        => apiCall('addPayment', data, 'POST'),
+  updatePayment:    (data)                        => apiCall('updatePayment', data, 'POST'),
+  deletePayment:    (paymentId)                   => apiCall('deletePayment', { paymentId }, 'POST'),
+
+  /* Reports map onto getTrips' existing filters (month /
+     dateFrom+dateTo / status), so no separate backend action
+     is needed. */
+  generateReport:   (opts)                        => {
+    opts = opts || {};
+    const params = { isAdmin: opts.isAdmin, userId: opts.userId };
+    if(opts.type === 'month')            params.month    = opts.month;
+    else if(opts.type === 'daterange'){  params.dateFrom = opts.dateFrom; params.dateTo = opts.dateTo; }
+    else if(opts.type === 'outstanding') params.status   = 'Balance';
+    // type === 'all' → no extra filter
+    return apiCall('getTrips', params, 'GET');
+  }
+};
 </script>
 
 <!-- Chart.js -->
@@ -272,9 +323,8 @@ tbody tr:last-child td{border-bottom:none;}
     </div>
 
     <div id="cloudNotice" class="cloud-notice" style="display:none;">
-      <b>Setup Required:</b> Firebase is not configured.<br>
-      Open this HTML file, find <code>firebaseConfig</code> near the top, and replace the placeholder values with your project credentials.<br>
-      <a href="https://console.firebase.google.com/" target="_blank" style="color:var(--orange-dark);">Create free Firebase project →</a>
+      <b>Setup Required:</b> The Apps Script backend is not configured.<br>
+      Open this HTML file, find <code>APPS_SCRIPT_URL</code> near the top, and replace the placeholder with your deployed Google Apps Script Web App URL.
     </div>
 
     <div class="login-error" id="loginError"></div>
@@ -550,7 +600,7 @@ tbody tr:last-child td{border-bottom:none;}
         <table style="width:100%;font-size:.85rem;">
           <tr style="border-bottom:1px solid #f1f3f7;"><td style="padding:.5rem;color:#64748b;">App</td><td style="padding:.5rem;font-weight:600;">Ride Management System (RMS)</td></tr>
           <tr style="border-bottom:1px solid #f1f3f7;"><td style="padding:.5rem;color:#64748b;">Version</td><td style="padding:.5rem;font-weight:600;">4.0 — Cloud Sync Edition</td></tr>
-          <tr style="border-bottom:1px solid #f1f3f7;"><td style="padding:.5rem;color:#64748b;">Platform</td><td style="padding:.5rem;font-weight:600;">PWA + Firebase Firestore</td></tr>
+          <tr style="border-bottom:1px solid #f1f3f7;"><td style="padding:.5rem;color:#64748b;">Platform</td><td style="padding:.5rem;font-weight:600;">Google Sheets via Apps Script</td></tr>
           <tr><td style="padding:.5rem;color:#64748b;">Storage</td><td style="padding:.5rem;font-weight:600;">Cloud (real-time sync across devices)</td></tr>
         </table>
       </div>
@@ -576,154 +626,30 @@ tbody tr:last-child td{border-bottom:none;}
 
 <script>
 /* ============================================================
-   RMS v4.0 — Cloud Sync Edition
+   RMS v4.0 — Google Sheets Edition
    ─────────────────────────────────────────────────────────
-   Fixes from v3:
-   1. Delete now works for BOTH pending (unsaved) rows AND
-      already-persisted DB records.  The trip table carries
-      a `dbId` field (Firestore doc id) so each row knows
-      exactly how to remove itself.
-   2. Demo credentials removed from login page.
-   3. Firebase Firestore used as the cloud database so that
-      the same data is accessible from any device / browser
-      that opens the HTML file (mobile, desktop, web).
-   4. Offline-fallback: if Firebase is not yet configured the
-      app uses IndexedDB exactly as before, so it still runs
-      locally out-of-the-box.
+   This file is purely a presentation layer. Every read and
+   write goes through the methods on `window.API` defined in
+   api.js, which is the only file that talks to the Google
+   Apps Script backend. The connected Google Spreadsheet is
+   the single source of truth — there is no local database,
+   no local database, and no cached copies of ride
+   data kept between screens.
 
-   CLOUD SETUP (one-time, 5 minutes)
-   ──────────────────────────────────
-   a) Go to https://console.firebase.google.com
-   b) Create a new project (free Spark plan)
-   c) Add a Web app → copy the firebaseConfig object
-   d) Paste it into the firebaseConfig block near the top
-      of this file.
-   e) Enable Firestore Database (production mode or test mode)
-   f) Enable Authentication → Anonymous (or Email/Password)
-      if you want real Firebase auth.
-   g) Deploy the HTML file to any web host (GitHub Pages,
-      Firebase Hosting, Netlify, etc.) so riders can open
-      the same URL from their phones.
+   Session persistence: only the logged-in user's identity is
+   kept in localStorage (so a refresh doesn't force a re-login).
+   All actual data is always fetched fresh from the backend.
    ============================================================ */
 
 /* ── State ─────────────────────────────────────────────── */
-let currentUser   = null;
-let currentModule = 'dashboard';
-let pendingTrips  = [];   // rows staged but not yet saved to DB
-let displayedTrips = []; // rows currently shown in trip table (mix of pending + DB)
-let isOnline      = false;
-let revenueChart  = null, paymentChart = null;
-
-/* ── Firebase helpers (fall back to IDB if not configured) ─ */
-const FB = () => window._firebase || {};
-const USE_CLOUD = () => FB().IS_CONFIGURED === true;
-
-/* ══════════════════════════════════════════════════════════
-   INDEXEDDB FALLBACK (unchanged from v3)
-   ══════════════════════════════════════════════════════════ */
-let idb;
-async function openIDB(){
-  return new Promise((res,rej)=>{
-    const r = indexedDB.open('RMS_v4',1);
-    r.onerror = ()=>rej(r.error);
-    r.onsuccess = ()=>{ idb=r.result; res(idb); };
-    r.onupgradeneeded = e=>{
-      const d=e.target.result;
-      if(!d.objectStoreNames.contains('riders')){
-        d.createObjectStore('riders',{keyPath:'riderId'});
-      }
-      if(!d.objectStoreNames.contains('trips')){
-        const s=d.createObjectStore('trips',{keyPath:'id',autoIncrement:true});
-        s.createIndex('tripDate','tripDate');
-      }
-    };
-  });
-}
-function idbStore(name,mode){ return idb.transaction([name],mode).objectStore(name); }
-function idbGetAll(name){ return new Promise((r,j)=>{ const q=idbStore(name,'readonly').getAll(); q.onsuccess=()=>r(q.result); q.onerror=()=>j(q.error); }); }
-function idbGet(name,key){ return new Promise((r,j)=>{ const q=idbStore(name,'readonly').get(key); q.onsuccess=()=>r(q.result); q.onerror=()=>j(q.error); }); }
-function idbAdd(name,data){ return new Promise((r,j)=>{ const q=idbStore(name,'readwrite').add(data); q.onsuccess=()=>r(q.result); q.onerror=()=>j(q.error); }); }
-function idbPut(name,data){ return new Promise((r,j)=>{ const q=idbStore(name,'readwrite').put(data); q.onsuccess=()=>r(q.result); q.onerror=()=>j(q.error); }); }
-function idbDel(name,key){ return new Promise((r,j)=>{ const q=idbStore(name,'readwrite').delete(key); q.onsuccess=()=>r(); q.onerror=()=>j(q.error); }); }
-
-/* ══════════════════════════════════════════════════════════
-   ABSTRACTED DATA LAYER
-   Each function works with Firestore when configured,
-   otherwise falls back to IndexedDB.
-   ══════════════════════════════════════════════════════════ */
-const ADMIN_PWD_KEY = 'rms_admin_pwd';
-function getAdminPwd(){ return localStorage.getItem(ADMIN_PWD_KEY) || 'admin123'; }
-function setAdminPwd(p){ localStorage.setItem(ADMIN_PWD_KEY, p); }
-
-/* Riders */
-async function dbGetAllRiders(){
-  if(USE_CLOUD()){
-    const {db,collection,getDocs} = FB();
-    const snap = await getDocs(collection(db,'riders'));
-    return snap.docs.map(d=>({...d.data(), _docId:d.id}));
-  }
-  return idbGetAll('riders');
-}
-async function dbGetRider(riderId){
-  if(USE_CLOUD()){
-    const {db,collection,query,where,getDocs} = FB();
-    const snap = await getDocs(query(collection(db,'riders'),where('riderId','==',riderId)));
-    return snap.empty ? null : {...snap.docs[0].data(), _docId:snap.docs[0].id};
-  }
-  return idbGet('riders',riderId);
-}
-async function dbSaveRider(data){
-  if(USE_CLOUD()){
-    const {db,collection,addDoc} = FB();
-    const ref = await addDoc(collection(db,'riders'), data);
-    return ref.id;
-  }
-  return idbAdd('riders', data);
-}
-async function dbUpdateRider(docId, data){
-  if(USE_CLOUD()){
-    const {db,doc,setDoc} = FB();
-    await setDoc(doc(db,'riders',docId), data);
-    return;
-  }
-  return idbPut('riders', data);
-}
-async function dbDeleteRider(docId, riderId){
-  if(USE_CLOUD()){
-    const {db,doc,deleteDoc} = FB();
-    await deleteDoc(doc(db,'riders',docId));
-    return;
-  }
-  return idbDel('riders', riderId);
-}
-
-/* Trips */
-async function dbGetAllTrips(){
-  if(USE_CLOUD()){
-    const {db,collection,getDocs,query,orderBy} = FB();
-    const snap = await getDocs(query(collection(db,'trips'),orderBy('tripDate','asc')));
-    return snap.docs.map(d=>({...d.data(), dbId:d.id}));
-  }
-  return (await idbGetAll('trips')).map(t=>({...t, dbId:String(t.id)}));
-}
-async function dbSaveTrip(data){
-  if(USE_CLOUD()){
-    const {db,collection,addDoc,serverTimestamp} = FB();
-    const ref = await addDoc(collection(db,'trips'), {...data, createdAt:serverTimestamp()});
-    return ref.id;
-  }
-  const id = await idbAdd('trips', data);
-  return String(id);
-}
-async function dbDeleteTrip(dbId){
-  if(USE_CLOUD()){
-    const {db,doc,deleteDoc} = FB();
-    await deleteDoc(doc(db,'trips', dbId));
-    return;
-  }
-  // IDB stores numeric id
-  return idbDel('trips', Number(dbId));
-}
+let currentUser    = null;
+let currentModule  = 'dashboard';
+let pendingTrips   = [];   // rows staged in the UI but not yet saved to the sheet
+let displayedTrips = [];   // rows currently shown in the trip table (saved rows for the active date/session)
+let revenueChart   = null, paymentChart = null;
+let isSavingTrips  = false; // guards against duplicate "Save All" submissions
+let editingTripId  = null;  // dbId of a saved trip currently being edited (uses API.updateTrip, no delete+recreate)
+let dashboardIntervalId = null; // auto-refresh timer, active while logged in
 
 /* ══════════════════════════════════════════════════════════
    NAVIGATION
@@ -773,15 +699,15 @@ async function handleLogin(e){
   showErr('');
   spin(true);
   try{
-    if(id.toLowerCase()==='admin'){
-      if(pwd !== getAdminPwd()) return showErr('Incorrect admin password.');
-      currentUser = {userId:'admin', name:'Admin', role:'Administrator', isAdmin:true};
-    } else {
-      const rider = await dbGetRider(id);
-      if(!rider)      return showErr('No rider found with that ID.');
-      if(rider.password !== pwd) return showErr('Incorrect password.');
-      currentUser = {userId:rider.riderId, name:rider.name, role:'Rider', isAdmin:false, _docId:rider._docId};
-    }
+    const res = await API.login(id, pwd);
+    if(!res.success){ showErr(res.message || 'Login failed.'); return; }
+    const u = res.user;
+    currentUser = {
+      userId: u.userId,
+      name: u.name,
+      role: u.role,
+      isAdmin: !!u.isAdmin
+    };
     localStorage.setItem('rmsUser', JSON.stringify(currentUser));
     enterApp();
     alert2('dashboardAlerts',`Welcome, ${currentUser.name}`, 'success');
@@ -795,9 +721,21 @@ function enterApp(){
   updateUserDisplay();
   buildNav();
   switchModule('dashboard');
+  startDashboardAutoRefresh();
 }
-function handleLogout(){
+function startDashboardAutoRefresh(){
+  stopDashboardAutoRefresh();
+  dashboardIntervalId = setInterval(()=>{
+    if(currentUser && currentModule==='dashboard') loadDashboard();
+  }, 30000);
+}
+function stopDashboardAutoRefresh(){
+  if(dashboardIntervalId){ clearInterval(dashboardIntervalId); dashboardIntervalId=null; }
+}
+async function handleLogout(){
   if(confirm('Logout?')){
+    await API.logout();
+    stopDashboardAutoRefresh();
     currentUser=null; localStorage.removeItem('rmsUser');
     document.getElementById('mainApp').style.display='none';
     document.getElementById('loginPage').style.display='flex';
@@ -834,45 +772,42 @@ async function refreshAll(){
 }
 
 /* ══════════════════════════════════════════════════════════
-   DASHBOARD
+   DASHBOARD  (values come entirely from the backend; no
+   client-side aggregation of locally stored arrays)
    ══════════════════════════════════════════════════════════ */
 async function loadDashboard(){
   try{
-    const allRidersRaw = await dbGetAllRiders();
-    const allTripsRaw  = await dbGetAllTrips();
-    const trips = currentUser.isAdmin ? allTripsRaw : allTripsRaw.filter(t=>t.riderId===currentUser.userId);
+    const res = await API.getDashboard(currentUser.isAdmin, currentUser.userId);
+    if(!res.success){ alert2('dashboardAlerts', res.message || 'Could not load dashboard.', 'error'); return; }
+    const d = res.data;
 
-    const total       = trips.reduce((s,t)=>s+Number(t.rideAmount),0);
-    const outstanding = trips.filter(t=>t.status==='Balance').reduce((s,t)=>s+Number(t.rideAmount),0);
+    document.getElementById('dashTotalRiders').textContent = d.totalRiders;
+    document.getElementById('dashTotalTrips').textContent  = d.totalTrips;
+    document.getElementById('dashTotalRevenue').textContent   = '₹'+Number(d.totalRevenue).toFixed(2);
+    document.getElementById('dashTotalOutstanding').textContent = '₹'+Number(d.outstanding).toFixed(2);
 
-    document.getElementById('dashTotalRiders').textContent = currentUser.isAdmin ? allRidersRaw.length : 1;
-    document.getElementById('dashTotalTrips').textContent  = trips.length;
-    document.getElementById('dashTotalRevenue').textContent   = '₹'+total.toFixed(2);
-    document.getElementById('dashTotalOutstanding').textContent = '₹'+outstanding.toFixed(2);
-
-    const recent = [...trips].reverse().slice(0,5);
+    const recent = d.recentTransactions || [];
     document.getElementById('dashRecentTrips').innerHTML = recent.length
       ? recent.map(t=>`<tr><td>${t.tripDate}</td><td>${t.riderName}</td><td>₹${Number(t.rideAmount).toFixed(2)}</td><td>${t.paymentMethod}</td><td><span class="badge badge-${t.status.toLowerCase()}">${t.status}</span></td></tr>`).join('')
       : '<tr><td colspan="5" class="empty-state">No transactions yet</td></tr>';
 
-    buildCharts(trips);
-  }catch(e){ console.error(e); }
+    buildCharts(d.dailyRevenue || {dates:[],values:[]}, d.paymentSplit || {labels:[],values:[]});
+  }catch(e){ console.error(e); alert2('dashboardAlerts', 'Error loading dashboard: '+e.message, 'error'); }
 }
 
-function buildCharts(trips){
-  const daily={};
-  trips.forEach(t=>{ daily[t.tripDate]=(daily[t.tripDate]||0)+Number(t.rideAmount); });
-  const dates=Object.keys(daily).sort();
+function buildCharts(dailyRevenue, paymentSplit){
+  const dates = dailyRevenue.dates || [];
+  const values = dailyRevenue.values || [];
 
   const rCtx=document.getElementById('revenueChart').getContext('2d');
   if(revenueChart) revenueChart.destroy();
-  revenueChart=new Chart(rCtx,{type:'line',data:{labels:dates,datasets:[{label:'Daily Revenue',data:dates.map(d=>daily[d]),borderColor:'#FF9500',backgroundColor:'rgba(255,149,0,.1)',borderWidth:2,tension:.35,fill:true,pointRadius:4,pointBackgroundColor:'#FF9500'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:dates.length>0}},scales:{y:{beginAtZero:true}}}});
+  revenueChart=new Chart(rCtx,{type:'line',data:{labels:dates,datasets:[{label:'Daily Revenue',data:values,borderColor:'#FF9500',backgroundColor:'rgba(255,149,0,.1)',borderWidth:2,tension:.35,fill:true,pointRadius:4,pointBackgroundColor:'#FF9500'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:dates.length>0}},scales:{y:{beginAtZero:true}}}});
 
-  const pm={};
-  trips.forEach(t=>{ pm[t.paymentMethod]=(pm[t.paymentMethod]||0)+Number(t.rideAmount); });
+  const pLabels = paymentSplit.labels || [];
+  const pValues = paymentSplit.values || [];
   const pCtx=document.getElementById('paymentChart').getContext('2d');
   if(paymentChart) paymentChart.destroy();
-  paymentChart=new Chart(pCtx,{type:'doughnut',data:{labels:Object.keys(pm),datasets:[{data:Object.values(pm),backgroundColor:['#FF9500','#2563eb','#1f9d55','#d93939'],borderColor:'#fff',borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
+  paymentChart=new Chart(pCtx,{type:'doughnut',data:{labels:pLabels,datasets:[{data:pValues,backgroundColor:['#FF9500','#2563eb','#1f9d55','#d93939'],borderColor:'#fff',borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -891,27 +826,31 @@ async function loadRiderMaster(){
   loadRidersForTable();
 }
 async function loadRidersForTable(){
-  const riders = await dbGetAllRiders();
+  const res = await API.getRiders();
+  if(!res.success){ alert2('riderAlerts', res.message || 'Could not load riders.', 'error'); return; }
+  const riders = res.riders || [];
   document.getElementById('riderTableBody').innerHTML = riders.length
     ? riders.map(r=>`<tr>
         <td><strong>${r.riderId}</strong></td><td>${r.name}</td><td>${r.email||'-'}</td><td>${r.phone||'-'}</td>
         <td>${r.pickupLocation}</td><td>${r.dropLocation}</td>
         <td><div class="action-buttons">
           <button class="icon-btn icon-btn-edit" onclick="editRider('${r.riderId}')" title="Edit"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-          <button class="icon-btn icon-btn-delete" onclick="deleteRider('${r.riderId}','${r._docId||r.riderId}')" title="Delete"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z"/></svg></button>
+          <button class="icon-btn icon-btn-delete" onclick="deleteRider('${r.riderId}')" title="Delete"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z"/></svg></button>
         </div></td>
       </tr>`).join('')
     : '<tr><td colspan="7" class="empty-state">No riders added yet</td></tr>';
 }
 async function populateEditDropdown(){
-  const riders = await dbGetAllRiders();
+  const res = await API.getRiders();
+  const riders = res.success ? (res.riders || []) : [];
   const sel = document.getElementById('editRiderSelect');
   sel.innerHTML = '<option value="">-- Choose rider --</option>'+riders.map(r=>`<option value="${r.riderId}">${r.name} (${r.riderId})</option>`).join('');
 }
 async function loadRiderForEdit(){
   const id = document.getElementById('editRiderSelect').value;
   if(!id){ document.getElementById('editFields').style.display='none'; return; }
-  const r = await dbGetRider(id);
+  const res = await API.getRider(id);
+  const r = res.success ? res.rider : null;
   if(r){
     document.getElementById('editRiderId').value = r.riderId;
     document.getElementById('editRiderName').value = r.name;
@@ -919,8 +858,9 @@ async function loadRiderForEdit(){
     document.getElementById('editRiderPhone').value = r.phone||'';
     document.getElementById('editPickupLocation').value = r.pickupLocation;
     document.getElementById('editDropLocation').value = r.dropLocation;
-    document.getElementById('editFields').dataset.docId = r._docId || r.riderId;
     document.getElementById('editFields').style.display='block';
+  } else {
+    alert2('riderAlerts', (res && res.message) || 'Rider not found.', 'error');
   }
 }
 async function saveNewRider(){
@@ -932,9 +872,8 @@ async function saveNewRider(){
   if(pwd.length<6) return alert2('riderAlerts','Password min 6 characters','error');
   spin(true);
   try{
-    const existing = await dbGetRider(riderId);
-    if(existing) return alert2('riderAlerts','Rider ID already exists','error');
-    await dbSaveRider({riderId,name,email,phone,password:pwd,pickupLocation:pickup,dropLocation:drop,createdAt:new Date().toISOString()});
+    const res = await API.addRider({riderId,name,email,phone,password:pwd,pickupLocation:pickup,dropLocation:drop});
+    if(!res.success) return alert2('riderAlerts', res.message || 'Could not save rider.', 'error');
     alert2('riderAlerts',`Rider "${name}" saved. Login ID: ${riderId}`,'success');
     clearRiderForm();
     await loadRidersForTable();
@@ -944,7 +883,6 @@ async function saveNewRider(){
 }
 async function updateRider(){
   const riderId=document.getElementById('editRiderId').value;
-  const docId=document.getElementById('editFields').dataset.docId;
   const name=v('editRiderName'), email=v('editRiderEmail'), phone=v('editRiderPhone');
   const pwd=v('editRiderPassword'), pwd2=v('editRiderPasswordConfirm');
   const pickup=v('editPickupLocation'), drop=v('editDropLocation');
@@ -953,10 +891,10 @@ async function updateRider(){
   if(pwd&&pwd.length<6) return alert2('riderAlerts','Password min 6 characters','error');
   spin(true);
   try{
-    const existing = await dbGetRider(riderId);
-    const updated = {...existing, name, email, phone, pickupLocation:pickup, dropLocation:drop,
-      password: pwd||existing.password, updatedAt:new Date().toISOString()};
-    await dbUpdateRider(docId||riderId, updated);
+    const payload = {riderId, name, email, phone, pickupLocation:pickup, dropLocation:drop};
+    if(pwd) payload.password = pwd;
+    const res = await API.updateRider(payload);
+    if(!res.success) return alert2('riderAlerts', res.message || 'Could not update rider.', 'error');
     alert2('riderAlerts','Rider updated','success');
     cancelEditRider();
     await loadRidersForTable();
@@ -972,11 +910,12 @@ function editRider(rid){
   document.getElementById('editRiderSelect').value=rid;
   loadRiderForEdit();
 }
-async function deleteRider(riderId, docId){
+async function deleteRider(riderId){
   if(!confirm(`Delete rider ${riderId}? This cannot be undone.`)) return;
   spin(true);
   try{
-    await dbDeleteRider(docId, riderId);
+    const res = await API.deleteRider(riderId);
+    if(!res.success) return alert2('riderAlerts', res.message || 'Could not delete rider.', 'error');
     alert2('riderAlerts','Rider deleted','success');
     await loadRidersForTable();
     await refreshAll();
@@ -988,25 +927,50 @@ async function deleteRider(riderId, docId){
    TRIP ENTRY
    ══════════════════════════════════════════════════════════ */
 async function loadTripEntry(){
-  const riders = await dbGetAllRiders();
+  const res = await API.getRiders();
+  const riders = res.success ? (res.riders || []) : [];
   const sel = document.getElementById('tripRiderName');
   sel.innerHTML = '<option value="">-- Select Rider --</option>'+riders.map(r=>`<option value="${r.riderId}">${r.name}</option>`).join('');
   document.getElementById('tripDate').value = new Date().toISOString().split('T')[0];
   pendingTrips = [];
   displayedTrips = [];
+  editingTripId = null;
   renderTripTable([]);
 }
 
-function addTripRow(){
+async function addTripRow(){
   const tripDate=v('tripDate'), session=v('tripSession'), riderId=v('tripRiderName');
   const amount=parseFloat(document.getElementById('tripRideAmount').value);
   const payment=v('tripPaymentMethod'), status=v('tripStatus');
   if(!tripDate||!session||!riderId||!amount||!payment||!status) return alert2('tripAlerts','Fill all fields','error');
   if(amount<=0) return alert2('tripAlerts','Amount must be > 0','error');
 
+  // If a saved row is being edited, save it in place via API.updateTrip
+  // instead of deleting and recreating it.
+  if(editingTripId){
+    const dupPending = pendingTrips.some(t=>t.tripDate===tripDate&&t.session===session&&t.riderId===riderId);
+    const dupSaved   = displayedTrips.some(t=>t.dbId!==editingTripId&&t.tripDate===tripDate&&t.session===session&&t.riderId===riderId);
+    if(dupPending||dupSaved) return alert2('tripAlerts','Rider already added for this date & session','error');
+    spin(true);
+    try{
+      const res = await API.updateTrip({tripId:editingTripId, tripDate, session, riderId, rideAmount:amount, paymentMethod:payment, status});
+      if(!res.success){ alert2('tripAlerts', res.message || 'Could not update trip.', 'error'); return; }
+      editingTripId = null;
+      document.getElementById('tripRideAmount').value='';
+      document.getElementById('tripPaymentMethod').value='';
+      document.getElementById('tripStatus').value='';
+      await filterTrips();
+      await refreshAll();
+      alert2('tripAlerts','Transaction updated','success');
+    }catch(e){ alert2('tripAlerts','Error: '+e.message,'error'); }
+    finally{ spin(false); }
+    return;
+  }
+
   // Allow same rider in different sessions; block duplicate in same date+session
-  const dup = pendingTrips.some(t=>t.tripDate===tripDate&&t.session===session&&t.riderId===riderId);
-  if(dup) return alert2('tripAlerts','Rider already added for this date & session','error');
+  const dupPending = pendingTrips.some(t=>t.tripDate===tripDate&&t.session===session&&t.riderId===riderId);
+  const dupSaved   = displayedTrips.some(t=>t.tripDate===tripDate&&t.session===session&&t.riderId===riderId);
+  if(dupPending||dupSaved) return alert2('tripAlerts','Rider already added for this date & session','error');
 
   const riderName = document.getElementById('tripRiderName').selectedOptions[0].text;
   const row = {tempId:'t'+Date.now(), dbId:null, tripDate, session, riderId, riderName, rideAmount:amount, paymentMethod:payment, status, pending:true};
@@ -1022,7 +986,7 @@ function addTripRow(){
 }
 
 function mergeAndRenderTrips(){
-  // displayedTrips holds already-saved trips from DB
+  // displayedTrips holds already-saved trips fetched from the sheet
   // pendingTrips holds newly staged rows not yet saved
   const combined = [...displayedTrips, ...pendingTrips];
   renderTripTable(combined);
@@ -1049,7 +1013,7 @@ function renderTripTable(rows){
   document.getElementById('tripTotalAmount').textContent = total.toFixed(2);
 }
 
-function editTripRow(rowId, isPending){
+async function editTripRow(rowId, isPending){
   let row;
   if(isPending){
     row = pendingTrips.find(t=>t.tempId===rowId);
@@ -1059,19 +1023,22 @@ function editTripRow(rowId, isPending){
     document.getElementById('tripPaymentMethod').value= row.paymentMethod;
     document.getElementById('tripStatus').value      = row.status;
     pendingTrips = pendingTrips.filter(t=>t.tempId!==rowId);
+    mergeAndRenderTrips();
   } else {
-    // Saved row: pull from displayedTrips
+    // Saved row: load it into the form for in-place editing. The
+    // actual save (API.updateTrip) happens when the user re-submits
+    // via addTripRow — nothing is deleted from the sheet here.
     row = displayedTrips.find(t=>t.dbId===rowId);
     if(!row) return;
+    document.getElementById('tripDate').value        = row.tripDate;
+    document.getElementById('tripSession').value      = row.session;
     document.getElementById('tripRiderName').value   = row.riderId;
     document.getElementById('tripRideAmount').value  = row.rideAmount;
     document.getElementById('tripPaymentMethod').value= row.paymentMethod;
     document.getElementById('tripStatus').value      = row.status;
-    // Remove from DB and from displayedTrips so it can be re-added
-    dbDeleteTrip(rowId).catch(e=>console.error(e));
-    displayedTrips = displayedTrips.filter(t=>t.dbId!==rowId);
+    editingTripId = rowId;
+    alert2('tripAlerts','Editing transaction — update the fields and click Add Transaction to save','info');
   }
-  mergeAndRenderTrips();
 }
 
 async function deleteTripRow(rowId, isPending){
@@ -1080,11 +1047,12 @@ async function deleteTripRow(rowId, isPending){
     mergeAndRenderTrips();
     alert2('tripAlerts','Transaction removed','success');
   } else {
-    // Delete persisted record from DB
+    // Delete a persisted record straight from the sheet
     if(!confirm('Delete this saved transaction?')) return;
     spin(true);
     try{
-      await dbDeleteTrip(rowId);
+      const res = await API.deleteTrip(rowId);
+      if(!res.success){ alert2('tripAlerts', res.message || 'Delete failed.', 'error'); return; }
       displayedTrips = displayedTrips.filter(t=>t.dbId!==rowId);
       mergeAndRenderTrips();
       await refreshAll();
@@ -1095,33 +1063,53 @@ async function deleteTripRow(rowId, isPending){
 }
 
 async function saveAllTrips(){
+  if(isSavingTrips) return; // guard against duplicate submissions
   const tripDate=v('tripDate'), session=v('tripSession');
   if(!tripDate||!session) return alert2('tripAlerts','Select date and session','error');
   if(!pendingTrips.length) return alert2('tripAlerts','No new transactions to save','error');
+  isSavingTrips = true;
   spin(true);
   try{
+    const failures = [];
     for(const t of pendingTrips){
-      const dbId = await dbSaveTrip({tripDate, session, riderId:t.riderId, riderName:t.riderName, rideAmount:t.rideAmount, paymentMethod:t.paymentMethod, status:t.status});
-      displayedTrips.push({...t, dbId, pending:false, tempId:null});
+      const res = await API.addTrip({
+        tripDate, session, riderId:t.riderId,
+        rideAmount:t.rideAmount, paymentMethod:t.paymentMethod, status:t.status
+      });
+      if(res.success && res.trip){
+        displayedTrips.push({...res.trip, pending:false, tempId:null});
+      } else {
+        failures.push(`${t.riderName}: ${res.message || 'failed'}`);
+      }
     }
-    pendingTrips=[];
+    pendingTrips = pendingTrips.filter(t => failures.some(f=>f.startsWith(t.riderName+':')));
     mergeAndRenderTrips();
     await refreshAll();
-    alert2('tripAlerts','All transactions saved','success');
-    document.getElementById('tripDate').value = new Date().toISOString().split('T')[0];
-    document.getElementById('tripSession').value='';
+    if(failures.length){
+      alert2('tripAlerts', 'Some transactions could not be saved: '+failures.join('; '), 'error');
+    } else {
+      alert2('tripAlerts','All transactions saved','success');
+      document.getElementById('tripDate').value = new Date().toISOString().split('T')[0];
+      document.getElementById('tripSession').value='';
+    }
   }catch(e){ alert2('tripAlerts','Save error: '+e.message,'error'); }
-  finally{ spin(false); }
+  finally{ spin(false); isSavingTrips = false; }
 }
 
 async function filterTrips(){
   const date=document.getElementById('searchTripDate').value;
   const sess=document.getElementById('searchTripSession').value;
-  if(!date){ renderTripTable([]); return; }
+  if(!date){ displayedTrips=[]; pendingTrips=[]; renderTripTable([]); return; }
   spin(true);
   try{
-    const all = await dbGetAllTrips();
-    displayedTrips = all.filter(t=>t.tripDate===date&&(!sess||t.session===sess));
+    const res = await API.getTrips({
+      isAdmin: currentUser.isAdmin,
+      userId: currentUser.userId,
+      date: date,
+      session: sess || undefined
+    });
+    if(!res.success){ alert2('tripAlerts', res.message || 'Could not load transactions.', 'error'); return; }
+    displayedTrips = res.trips || [];
     pendingTrips=[];
     mergeAndRenderTrips();
   }catch(e){ alert2('tripAlerts','Filter error: '+e.message,'error'); }
@@ -1141,34 +1129,31 @@ function updateReportFilters(){
   document.getElementById('monthFG').style.display = t==='month'?'block':'none';
   document.getElementById('fromFG').style.display  = t==='daterange'?'block':'none';
   document.getElementById('toFG').style.display    = t==='daterange'?'block':'none';
+  generateReport();
 }
 async function generateReport(){
   const type=v('reportSearchType');
   spin(true);
   try{
-    let all = await dbGetAllTrips();
-    if(!currentUser.isAdmin) all=all.filter(t=>t.riderId===currentUser.userId);
-
-    let data=[];
+    const options = { isAdmin: currentUser.isAdmin, userId: currentUser.userId, type };
     if(type==='month'){
-      const m=v('reportMonth'); if(!m){spin(false);return;}
-      data=all.filter(t=>t.tripDate.substring(0,7)===m);
-    } else if(type==='all'){
-      data=all;
-    } else if(type==='outstanding'){
-      data=all.filter(t=>t.status==='Balance');
+      const m=v('reportMonth'); if(!m){ spin(false); return; }
+      options.month = m;
     } else if(type==='daterange'){
       const f=v('reportFromDate'), to=v('reportToDate');
-      if(f&&to) data=all.filter(t=>t.tripDate>=f&&t.tripDate<=to);
+      if(!f||!to){ spin(false); return; }
+      options.dateFrom = f; options.dateTo = to;
     }
-    renderReport(data);
+    const res = await API.generateReport(options);
+    if(!res.success){ alert2('reportAlerts', res.message || 'Could not generate report.', 'error'); return; }
+    renderReport(res.trips || []);
   }catch(e){ alert2('reportAlerts','Error: '+e.message,'error'); }
   finally{ spin(false); }
 }
 function renderReport(data){
   const c=document.getElementById('reportContainer'), s=document.getElementById('reportStats');
   if(!data.length){ c.style.display='none'; s.style.display='none'; alert2('reportAlerts','No transactions found','info'); return; }
-  document.getElementById('reportTableBody').innerHTML=data.sort((a,b)=>b.tripDate<a.tripDate?-1:1).map(t=>`<tr><td>${t.tripDate}</td><td>${t.session}</td><td>${t.riderName}</td><td>₹${Number(t.rideAmount).toFixed(2)}</td><td>${t.paymentMethod}</td><td><span class="badge badge-${t.status.toLowerCase()}">${t.status}</span></td></tr>`).join('');
+  document.getElementById('reportTableBody').innerHTML=data.slice().sort((a,b)=>b.tripDate<a.tripDate?-1:1).map(t=>`<tr><td>${t.tripDate}</td><td>${t.session}</td><td>${t.riderName}</td><td>₹${Number(t.rideAmount).toFixed(2)}</td><td>${t.paymentMethod}</td><td><span class="badge badge-${t.status.toLowerCase()}">${t.status}</span></td></tr>`).join('');
   c.style.display='block';
   const total=data.reduce((s,t)=>s+Number(t.rideAmount),0);
   const paid=data.filter(t=>t.status==='Paid').reduce((s,t)=>s+Number(t.rideAmount),0);
@@ -1203,23 +1188,27 @@ async function updatePassword(){
   if(!np||!cp) return alert2('settingsAlerts','Enter new password','error');
   if(np!==cp) return alert2('settingsAlerts','Passwords do not match','error');
   if(np.length<6) return alert2('settingsAlerts','Min 6 characters','error');
+  spin(true);
   try{
-    if(currentUser.isAdmin){
-      setAdminPwd(np);
-    } else {
-      const r=await dbGetRider(currentUser.userId);
-      await dbUpdateRider(r._docId||r.riderId, {...r, password:np, updatedAt:new Date().toISOString()});
-    }
+    const res = await API.changePassword(currentUser.userId, currentUser.isAdmin, np);
+    if(!res.success) return alert2('settingsAlerts', res.message || 'Could not update password.', 'error');
     alert2('settingsAlerts','Password updated','success');
     document.getElementById('settingsNewPassword').value='';
     document.getElementById('settingsConfirmPassword').value='';
   }catch(e){ alert2('settingsAlerts','Error: '+e.message,'error'); }
+  finally{ spin(false); }
 }
 async function exportData(){
   spin(true);
   try{
-    const riders=await dbGetAllRiders(), trips=await dbGetAllTrips();
-    const blob=new Blob([JSON.stringify({exportDate:new Date().toISOString(),riders,trips},null,2)],{type:'application/json'});
+    const [ridersRes, tripsRes] = await Promise.all([
+      API.getRiders(),
+      API.getTrips({ isAdmin: true })
+    ]);
+    if(!ridersRes.success || !tripsRes.success){
+      return alert2('settingsAlerts', (ridersRes.message||tripsRes.message||'Export failed.'), 'error');
+    }
+    const blob=new Blob([JSON.stringify({exportDate:new Date().toISOString(),riders:ridersRes.riders,trips:tripsRes.trips},null,2)],{type:'application/json'});
     const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='rms_backup_'+Date.now()+'.json';
     document.body.appendChild(a); a.click(); a.remove();
     alert2('settingsAlerts','Data exported','success');
@@ -1234,14 +1223,30 @@ async function performImport(){
   spin(true);
   try{
     const data=JSON.parse(await file.text());
-    // Delete existing
-    const riders=await dbGetAllRiders();
-    for(const r of riders) await dbDeleteRider(r._docId||r.riderId, r.riderId);
-    const trips=await dbGetAllTrips();
-    for(const t of trips) await dbDeleteTrip(t.dbId);
-    // Import
-    if(data.riders) for(const r of data.riders){ const {_docId,...rest}=r; await dbSaveRider(rest); }
-    if(data.trips)  for(const t of data.trips){  const {dbId,id,...rest}=t; await dbSaveTrip(rest); }
+
+    // Delete existing riders and trips from the spreadsheet
+    const ridersRes = await API.getRiders();
+    if(ridersRes.success){
+      for(const r of (ridersRes.riders||[])) await API.deleteRider(r.riderId);
+    }
+    const tripsRes = await API.getTrips({ isAdmin: true });
+    if(tripsRes.success){
+      for(const t of (tripsRes.trips||[])) await API.deleteTrip(t.tripId);
+    }
+
+    // Re-import from the backup file
+    if(data.riders) for(const r of data.riders){
+      await API.addRider({
+        riderId:r.riderId, name:r.name, email:r.email, phone:r.phone,
+        password:r.password || 'changeme123', pickupLocation:r.pickupLocation, dropLocation:r.dropLocation
+      });
+    }
+    if(data.trips) for(const t of data.trips){
+      await API.addTrip({
+        tripDate:t.tripDate, session:t.session, riderId:t.riderId,
+        rideAmount:t.rideAmount, paymentMethod:t.paymentMethod, status:t.status, remarks:t.remarks
+      });
+    }
     alert2('settingsAlerts','Data imported','success');
     closeImportModal();
     await refreshAll();
@@ -1252,10 +1257,14 @@ async function resetApplication(){
   if(!confirm('Delete ALL data?')||!confirm('This cannot be undone. Confirm?')) return;
   spin(true);
   try{
-    const riders=await dbGetAllRiders();
-    for(const r of riders) await dbDeleteRider(r._docId||r.riderId, r.riderId);
-    const trips=await dbGetAllTrips();
-    for(const t of trips) await dbDeleteTrip(t.dbId);
+    const ridersRes = await API.getRiders();
+    if(ridersRes.success){
+      for(const r of (ridersRes.riders||[])) await API.deleteRider(r.riderId);
+    }
+    const tripsRes = await API.getTrips({ isAdmin: true });
+    if(tripsRes.success){
+      for(const t of (tripsRes.trips||[])) await API.deleteTrip(t.tripId);
+    }
     alert2('settingsAlerts','Application reset','success');
     await refreshAll();
   }catch(e){ alert2('settingsAlerts','Error: '+e.message,'error'); }
@@ -1267,37 +1276,43 @@ async function resetApplication(){
    ══════════════════════════════════════════════════════════ */
 function v(id){ const el=document.getElementById(id); return el ? el.value.trim() : ''; }
 
-function updateSyncStatus(){
+function updateSyncStatus(online){
   const el=document.getElementById('syncIndicator');
   const lbl=document.getElementById('syncLabel');
-  if(USE_CLOUD()){ el.className='sync-indicator online'; lbl.textContent='Cloud Sync'; }
-  else { el.className='sync-indicator'; lbl.textContent='Local'; }
+  if(online){ el.className='sync-indicator online'; lbl.textContent='Cloud Sync'; }
+  else { el.className='sync-indicator offline'; lbl.textContent='Offline'; }
 }
 
 /* ══════════════════════════════════════════════════════════
    BOOT
    ══════════════════════════════════════════════════════════ */
 window.rmsInit = async function(){
-  await openIDB(); // always open IDB for fallback
-
-  // Show Firebase setup notice if not configured
-  if(!USE_CLOUD()){
+  if(!API.isConfigured()){
     document.getElementById('cloudNotice').style.display='block';
+    updateSyncStatus(false);
+    return;
   }
-  updateSyncStatus();
 
-  // Auto-login if session exists
+  // Ping the backend once to reflect real connectivity in the
+  // sync indicator; login/data calls still work either way.
+  try{
+    const res = await API.getSettings();
+    updateSyncStatus(!!res.success);
+  }catch(e){ updateSyncStatus(false); }
+
+  // Auto-login if a session exists
   const saved = localStorage.getItem('rmsUser');
   if(saved){
     currentUser = JSON.parse(saved);
     if(!currentUser.isAdmin){
-      // Re-validate rider still exists
-      const r = await dbGetRider(currentUser.userId);
-      if(!r){ localStorage.removeItem('rmsUser'); currentUser=null; }
+      // Re-validate the rider still exists in the sheet
+      const res = await API.getRider(currentUser.userId);
+      if(!res.success || !res.rider){ localStorage.removeItem('rmsUser'); currentUser=null; }
     }
   }
   if(currentUser){ enterApp(); }
 };
+
 </script>
 </body>
 </html>
