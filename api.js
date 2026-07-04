@@ -28,7 +28,7 @@
      Paste your deployed Apps Script Web App URL here:
      https://script.google.com/macros/s/AKfycb.../exec
   ------------------------------------------------------------- */
-  const API_URL = "https://script.google.com/macros/s/AKfycbwxjtcsfFiQAPacrWUFdoNqBUesSlhpRr6Ct5AepO6GZr4DBoAPwZsh_YfeVhDmWfBD/exec";
+  const API_URL = "https://script.google.com/macros/s/AKfycbw0XGZrzPeOrHFZAblh2zU7M9fi7R88CyQ6fjtualmuz0wIZ2kD7d7yjpR5hRymkQLG/exec";
 
   const REQUEST_TIMEOUT_MS = 15000;
   const MAX_RETRIES = 2; // retries in addition to the first attempt
