@@ -1167,7 +1167,7 @@ function exportReportPDF(){
   const el=document.getElementById('reportContainer');
   if(!el||el.style.display==='none') return alert2('reportAlerts','Generate report first','error');
   const wrap=document.createElement('div');
-  wrap.innerHTML=`<h2 style="font-family:sans-serif;margin-bottom:1rem;">RMS Trip Report — ${new Date().toLocaleDateString()}</h2>`+el.innerHTML+
+  wrap.innerHTML=`<h2 style="font-family:sans-serif;margin-bottom:1rem;">CMS Trip Report — ${new Date().toLocaleDateString()}</h2>`+el.innerHTML+
     `<p style="font-family:sans-serif;margin-top:1rem;">Total: ${document.getElementById('rptAmount').textContent} &nbsp;|&nbsp; Paid: ${document.getElementById('rptPaid').textContent} &nbsp;|&nbsp; Outstanding: ${document.getElementById('rptOutstanding').textContent}</p>`;
   html2pdf().set({margin:10,filename:'rms_report_'+Date.now()+'.pdf',image:{type:'jpeg',quality:.98},html2canvas:{scale:2},jsPDF:{orientation:'landscape',unit:'mm',format:'a4'}}).from(wrap).save();
   alert2('reportAlerts','PDF exported','success');
@@ -1176,7 +1176,7 @@ function printReport(){
   const el=document.getElementById('reportContainer');
   if(!el||el.style.display==='none') return alert2('reportAlerts','Generate report first','error');
   const w=window.open('','','width=1100,height=700');
-  w.document.write('<html><head><title>RMS Report</title><style>body{font-family:Arial;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ddd;padding:8px;text-align:left;}</style></head><body>'+el.innerHTML+'</body></html>');
+  w.document.write('<html><head><title>CMS Report</title><style>body{font-family:Arial;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ddd;padding:8px;text-align:left;}</style></head><body>'+el.innerHTML+'</body></html>');
   w.document.close(); w.print();
 }
 
