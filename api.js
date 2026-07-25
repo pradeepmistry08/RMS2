@@ -86,6 +86,7 @@ window.API = {
 
   // QR
   getQRPaymentData: (journeyId, riderId)           => apiCall('getQRPaymentData', { journeyId, riderId }, 'GET'),
+  getUpiPaymentLink: (detailId)                    => apiCall('getUpiPaymentLink', { detailId }, 'GET'),
 
   // Reports — rider-specific rows for riders, org-wide for admins.
   // dateFrom/dateTo are plain 'YYYY-MM-DD' strings; statusFilter is 'outstanding' or omitted.
