@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<meta name="description" content="CMS v5.0 - Carpool Management System with Journeys & Wallet">
+<meta name="description" content="RMS v5.0 - Ride Management System with Journeys & Wallet">
 <meta name="theme-color" content="#FF9500">
-<title>CMS - Carpool Management System</title>
+<title>RMS - Ride Management System</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="CMS">
+<meta name="apple-mobile-web-app-title" content="RMS">
 
 <script src="api.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
@@ -259,8 +259,8 @@ tbody tr:last-child td{border-bottom:none;}
       <div class="login-logo-mark">
         <svg viewBox="0 0 24 24"><path d="M5 17h14M5 17a2 2 0 1 0 4 0M5 17a2 2 0 1 1 4 0m6 0a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0M5 17l1.5-7.5A2 2 0 0 1 8.45 8h7.1a2 2 0 0 1 1.95 1.5L19 17M3 17h2m14 0h2"/></svg>
       </div>
-      <h1>CMS</h1>
-      <p>Carpool Management System</p>
+      <h1>RMS</h1>
+      <p>Ride Management System</p>
     </div>
     <div id="cloudNotice" class="cloud-notice" style="display:none;">
       <b>Setup Required:</b> The Apps Script backend is not configured.<br>
@@ -291,7 +291,7 @@ tbody tr:last-child td{border-bottom:none;}
       <button class="menu-btn" onclick="toggleDrawer(true)"><svg viewBox="0 0 24 24"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
       <div class="brand">
         <div class="brand-mark"><svg viewBox="0 0 24 24"><path d="M5 17h14M5 17a2 2 0 1 0 4 0M5 17a2 2 0 1 1 4 0m6 0a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0M5 17l1.5-7.5A2 2 0 0 1 8.45 8h7.1a2 2 0 0 1 1.95 1.5L19 17M3 17h2m14 0h2"/></svg></div>
-        <div>CMS <small>Carpool Management</small></div>
+        <div>RMS <small>Ride Management</small></div>
       </div>
     </div>
     <div class="nav-row" id="desktopNav"></div>
@@ -585,7 +585,7 @@ tbody tr:last-child td{border-bottom:none;}
       </div>
       <div id="reportContainer" class="card" style="display:none;">
         <div class="card-title"><svg viewBox="0 0 24 24"><path d="M4 19h16M4 19V5h16v14"/></svg>Journey Details</div>
-        <div class="table-wrap"><table><thead><tr><th>Date</th><th>Session</th><th>Rider</th><th>Amount (₹)</th><th>Status</th><th>Method</th></tr></thead><tbody id="reportTableBody"></tbody></table></div>
+        <div class="table-wrap"><table><thead><tr><th>Date</th><th>Session</th><th>Rider</th><th>Amount (₹)</th><th>Status</th><th>Method</th><th>Action</th></tr></thead><tbody id="reportTableBody"></tbody></table></div>
       </div>
       <div id="reportStats" style="display:none;">
         <div class="stats-grid">
@@ -638,7 +638,7 @@ tbody tr:last-child td{border-bottom:none;}
       <div class="card">
         <div class="card-title"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>About</div>
         <table style="width:100%;font-size:.85rem;">
-          <tr style="border-bottom:1px solid #f1f3f7;"><td style="padding:.5rem;color:#64748b;">App</td><td style="padding:.5rem;font-weight:600;">Carpool Management System (CMS)</td></tr>
+          <tr style="border-bottom:1px solid #f1f3f7;"><td style="padding:.5rem;color:#64748b;">App</td><td style="padding:.5rem;font-weight:600;">Ride Management System (RMS)</td></tr>
           <tr style="border-bottom:1px solid #f1f3f7;"><td style="padding:.5rem;color:#64748b;">Version</td><td style="padding:.5rem;font-weight:600;">5.0 — Journey & Wallet Edition</td></tr>
           <tr><td style="padding:.5rem;color:#64748b;">Platform</td><td style="padding:.5rem;font-weight:600;">Google Sheets via Apps Script</td></tr>
         </table>
@@ -1095,7 +1095,7 @@ async function openQRModal(journeyId,riderId,detailId){
         <div class="payment-method-selector">
           <button class="pm-btn" id="pm-wallet" onclick="selectPaymentMethod('Wallet')">Wallet</button>
           <button class="pm-btn" id="pm-upi" onclick="selectPaymentMethod('UPI')">UPI/Card</button>
-          <button class="pm-btn" id="pm-cash" onclick="selectPaymentMethod('Cash')">Sride/Cash</button>
+          <button class="pm-btn" id="pm-cash" onclick="selectPaymentMethod('Cash')">Cash</button>
         </div>
       </div>
       <div class="btn-group" style="justify-content:center;margin-top:1rem;">
@@ -1255,6 +1255,7 @@ function renderReport(rows, stats){
       <td>₹${Number(r.RideAmount).toFixed(2)}</td>
       <td><span class="badge badge-${statusClass}">${r.PaymentStatus}</span></td>
       <td>${r.PaymentMethod||'-'}</td>
+      <td>${r.PaymentStatus!=='Paid' ? `<button class="btn btn-purple" style="padding:.4rem .7rem;font-size:.75rem;" onclick="payViaUpi('${r.DetailID}')">Pay Now</button>` : '-'}</td>
     </tr>`;
   }).join('');
   c.style.display='block';
@@ -1264,20 +1265,29 @@ function renderReport(rows, stats){
   document.getElementById('rptOutstanding').textContent='₹'+Number(stats.outstandingAmount||0).toFixed(2);
   s.style.display='block';
 }
+async function payViaUpi(detailId){
+  spin(true);
+  try{
+    const res=await API.getUpiPaymentLink(detailId);
+    if(!res.success) return alert2('reportAlerts',res.message||'Could not start payment.','error');
+    window.location.href=res.upiUrl;
+  }catch(e){ alert2('reportAlerts','Error: '+e.message,'error'); }
+  finally{ spin(false); }
+}
 function exportReportPDF(){
   const el=document.getElementById('reportContainer');
   if(!el||el.style.display==='none') return alert2('reportAlerts','Generate report first','error');
   const wrap=document.createElement('div');
-  wrap.innerHTML=`<h2 style="font-family:sans-serif;margin-bottom:1rem;">CMS Journey Report — ${new Date().toLocaleDateString()}</h2>`+el.innerHTML+
+  wrap.innerHTML=`<h2 style="font-family:sans-serif;margin-bottom:1rem;">RMS Journey Report — ${new Date().toLocaleDateString()}</h2>`+el.innerHTML+
     `<p style="font-family:sans-serif;margin-top:1rem;">Total: ${document.getElementById('rptAmount').textContent} | Paid: ${document.getElementById('rptPaid').textContent} | Outstanding: ${document.getElementById('rptOutstanding').textContent}</p>`;
-  html2pdf().set({margin:10,filename:'CMS_report_'+Date.now()+'.pdf',image:{type:'jpeg',quality:.98},html2canvas:{scale:2},jsPDF:{orientation:'landscape',unit:'mm',format:'a4'}}).from(wrap).save();
+  html2pdf().set({margin:10,filename:'rms_report_'+Date.now()+'.pdf',image:{type:'jpeg',quality:.98},html2canvas:{scale:2},jsPDF:{orientation:'landscape',unit:'mm',format:'a4'}}).from(wrap).save();
   alert2('reportAlerts','PDF exported','success');
 }
 function printReport(){
   const el=document.getElementById('reportContainer');
   if(!el||el.style.display==='none') return alert2('reportAlerts','Generate report first','error');
   const w=window.open('','','width=1100,height=700');
-  w.document.write('<html><head><title>CMS Report</title><style>body{font-family:Arial;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ddd;padding:8px;text-align:left;}</style></head><body>'+el.innerHTML+'</body></html>');
+  w.document.write('<html><head><title>RMS Report</title><style>body{font-family:Arial;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ddd;padding:8px;text-align:left;}</style></head><body>'+el.innerHTML+'</body></html>');
   w.document.close(); w.print();
 }
 
