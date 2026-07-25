@@ -585,7 +585,7 @@ tbody tr:last-child td{border-bottom:none;}
       </div>
       <div id="reportContainer" class="card" style="display:none;">
         <div class="card-title"><svg viewBox="0 0 24 24"><path d="M4 19h16M4 19V5h16v14"/></svg>Journey Details</div>
-        <div class="table-wrap"><table><thead><tr><th>Date</th><th>Session</th><th>Riders</th><th>Total Amount (₹)</th><th>Status</th></tr></thead><tbody id="reportTableBody"></tbody></table></div>
+        <div class="table-wrap"><table><thead><tr><th>Date</th><th>Session</th><th>Rider</th><th>Amount (₹)</th><th>Status</th><th>Method</th></tr></thead><tbody id="reportTableBody"></tbody></table></div>
       </div>
       <div id="reportStats" style="display:none;">
         <div class="stats-grid">
@@ -1221,40 +1221,47 @@ async function generateReport(){
   const type=v('reportSearchType');
   spin(true);
   try{
-    const opts={};
-    if(type==='month'){ const m=v('reportMonth'); if(!m){spin(false);return;} const [y,mo]=m.split('-'); opts.dateFrom=`${y}-${mo}-01`; opts.dateTo=`${y}-${mo}-31`; }
-    else if(type==='daterange'){ const f=v('reportFromDate'), to=v('reportToDate'); if(!f||!to){spin(false);return;} opts.dateFrom=f; opts.dateTo=to; }
-    else if(type==='outstanding'){ /* filter client-side below */ }
-    const res=await API.getJourneys(opts);
-    if(!res.success){ alert2('reportAlerts',res.message||'Could not generate report.','error'); return; }
-    let journeys=res.journeys||[];
-    if(!currentUser.isAdmin){
-      // Riders see only journeys they were part of — fetch details
-      const filtered=[];
-      for(const j of journeys){
-        const ids=(j.SelectedRiderIDs||'').split(',');
-        if(ids.includes(currentUser.userId)) filtered.push(j);
-      }
-      journeys=filtered;
+    let dateFrom='', dateTo='', statusFilter='';
+    if(type==='month'){
+      const m=v('reportMonth'); if(!m){spin(false);return;}
+      const [y,mo]=m.split('-');
+      dateFrom=`${y}-${mo}-01`;
+      // last day of month, computed correctly regardless of month length
+      const lastDay=new Date(Number(y), Number(mo), 0).getDate();
+      dateTo=`${y}-${mo}-${String(lastDay).padStart(2,'0')}`;
+    } else if(type==='daterange'){
+      const f=v('reportFromDate'), to=v('reportToDate');
+      if(!f||!to){spin(false);return;}
+      dateFrom=f; dateTo=to;
+    } else if(type==='outstanding'){
+      statusFilter='outstanding';
     }
-    renderReport(journeys);
+    // type==='all': no date/status filters
+    const res=await API.getMyReport(currentUser.isAdmin, currentUser.userId, dateFrom, dateTo, statusFilter);
+    if(!res.success){ alert2('reportAlerts',res.message||'Could not generate report.','error'); return; }
+    renderReport(res.rows||[], res.stats||{});
   }catch(e){ alert2('reportAlerts','Error: '+e.message,'error'); }
   finally{ spin(false); }
 }
-function renderReport(data){
+function renderReport(rows, stats){
   const c=document.getElementById('reportContainer'), s=document.getElementById('reportStats');
-  if(!data.length){ c.style.display='none'; s.style.display='none'; alert2('reportAlerts','No journeys found','info'); return; }
-  document.getElementById('reportTableBody').innerHTML=data.slice().sort((a,b)=>b.JourneyDate<a.JourneyDate?-1:1).map(j=>{
-    const riderCount=(j.SelectedRiderIDs||'').split(',').filter(Boolean).length;
-    return `<tr><td>${j.JourneyDate}</td><td>${j.Session}</td><td>${riderCount}</td><td>₹${Number(j.TotalAmount).toFixed(2)}</td><td><span class="badge badge-${j.Status.toLowerCase()}">${j.Status}</span></td></tr>`;
+  if(!rows.length){ c.style.display='none'; s.style.display='none'; alert2('reportAlerts','No journeys found','info'); return; }
+  document.getElementById('reportTableBody').innerHTML=rows.map(r=>{
+    const statusClass = r.PaymentStatus==='Paid' ? 'paid' : 'pending';
+    return `<tr>
+      <td>${r.JourneyDate}</td>
+      <td>${r.Session}</td>
+      <td>${r.RiderName}</td>
+      <td>₹${Number(r.RideAmount).toFixed(2)}</td>
+      <td><span class="badge badge-${statusClass}">${r.PaymentStatus}</span></td>
+      <td>${r.PaymentMethod||'-'}</td>
+    </tr>`;
   }).join('');
   c.style.display='block';
-  const total=data.reduce((s,j)=>s+Number(j.TotalAmount||0),0);
-  const completed=data.filter(j=>j.Status==='Completed').reduce((s,j)=>s+Number(j.TotalAmount||0),0);
-  document.getElementById('rptTotal').textContent=data.length;
-  document.getElementById('rptAmount').textContent='₹'+total.toFixed(2);
-  document.getElementById('rptPaid').textContent='₹'+completed.toFixed(2);
-  document.getElementById('rptOutstanding').textContent='₹'+(total-completed).toFixed(2);
+  document.getElementById('rptTotal').textContent=stats.totalCount||0;
+  document.getElementById('rptAmount').textContent='₹'+Number(stats.totalAmount||0).toFixed(2);
+  document.getElementById('rptPaid').textContent='₹'+Number(stats.paidAmount||0).toFixed(2);
+  document.getElementById('rptOutstanding').textContent='₹'+Number(stats.outstandingAmount||0).toFixed(2);
   s.style.display='block';
 }
 function exportReportPDF(){
@@ -1262,7 +1269,7 @@ function exportReportPDF(){
   if(!el||el.style.display==='none') return alert2('reportAlerts','Generate report first','error');
   const wrap=document.createElement('div');
   wrap.innerHTML=`<h2 style="font-family:sans-serif;margin-bottom:1rem;">RMS Journey Report — ${new Date().toLocaleDateString()}</h2>`+el.innerHTML+
-    `<p style="font-family:sans-serif;margin-top:1rem;">Total: ${document.getElementById('rptAmount').textContent} | Completed: ${document.getElementById('rptPaid').textContent} | Outstanding: ${document.getElementById('rptOutstanding').textContent}</p>`;
+    `<p style="font-family:sans-serif;margin-top:1rem;">Total: ${document.getElementById('rptAmount').textContent} | Paid: ${document.getElementById('rptPaid').textContent} | Outstanding: ${document.getElementById('rptOutstanding').textContent}</p>`;
   html2pdf().set({margin:10,filename:'rms_report_'+Date.now()+'.pdf',image:{type:'jpeg',quality:.98},html2canvas:{scale:2},jsPDF:{orientation:'landscape',unit:'mm',format:'a4'}}).from(wrap).save();
   alert2('reportAlerts','PDF exported','success');
 }
