@@ -4,7 +4,7 @@
    ============================================================
    SETUP: paste your deployed Apps Script Web App URL below.
    ============================================================ */
-const APPS_SCRIPT_URL = 'PASTE_YOUR_DEPLOYED_WEB_APP_URL_HERE';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw0XGZrzPeOrHFZAblh2zU7M9fi7R88CyQ6fjtualmuz0wIZ2kD7d7yjpR5hRymkQLG/exec';
 
 function apiIsConfigured(){
   return typeof APPS_SCRIPT_URL === 'string' && APPS_SCRIPT_URL.indexOf('https://script.google.com') === 0;
