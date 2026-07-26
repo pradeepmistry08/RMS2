@@ -553,14 +553,15 @@ tbody tr:last-child td{border-bottom:none;}
         </div>
 
         <div class="card">
-          <div class="card-title"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Request Top-up</div>
-          <p style="color:#94a3b8;font-size:.82rem;margin-bottom:1rem;">Submit a request — admin will review and add funds to your wallet once approved.</p>
+          <div class="card-title"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add Funds to Wallet</div>
+          <p style="color:#94a3b8;font-size:.82rem;margin-bottom:1rem;">Pay via UPI, then send for admin approval — funds are added to your wallet once approved.</p>
           <div class="form-row">
             <div class="fg"><label>Amount (₹) <span class="req">*</span></label><input type="number" id="myTopupAmount" placeholder="0.00" step="0.01" min="0"></div>
             <div class="fg"><label>Notes</label><input type="text" id="myTopupNotes" placeholder="e.g. Paid via UPI on 26 Jul"></div>
           </div>
           <div class="btn-group">
-            <button class="btn btn-purple" onclick="submitTopupRequest()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Submit Request</button>
+            <button class="btn btn-purple" onclick="startTopupPayment()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>+ Add Funds</button>
+            <button class="btn btn-info" id="topupSendApprovalBtn" onclick="submitTopupRequest()" disabled>I've Paid — Send for Approval</button>
           </div>
         </div>
 
@@ -614,6 +615,17 @@ tbody tr:last-child td{border-bottom:none;}
           <div class="stat-card c4"><div class="stat-label">Outstanding</div><div class="stat-value" id="rptOutstanding">₹0</div></div>
         </div>
       </div>
+
+      <!-- RIDER PAYMENT MODAL -->
+      <div id="riderPayModal" class="modal">
+        <div class="modal-content" style="max-width:400px;">
+          <div class="modal-header">Pay Outstanding Amount</div>
+          <div id="riderPayBody"></div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeRiderPayModal()">Close</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- SETTINGS -->
@@ -625,6 +637,18 @@ tbody tr:last-child td{border-bottom:none;}
       <div id="settingsAlerts"></div>
 
       <div id="adminDataSection" style="display:none;">
+        <div class="card">
+          <div class="card-title"><svg viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg>UPI Payment Settings (Admin Only)</div>
+          <p style="margin-bottom:1rem;color:#64748b;font-size:.85rem;">Riders paying via "Pay Now" or wallet top-up will be directed to this UPI ID.</p>
+          <div class="form-row">
+            <div class="fg"><label>Your UPI ID <span class="req">*</span></label><input type="text" id="settingsUpiId" placeholder="e.g. yourname@okhdfcbank"></div>
+            <div class="fg"><label>Payee Display Name</label><input type="text" id="settingsUpiPayeeName" placeholder="e.g. RMS Admin"></div>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-primary" onclick="saveUpiSettings()">Save UPI Settings</button>
+          </div>
+        </div>
+
         <div class="card">
           <div class="card-title"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Data Management (Admin Only)</div>
           <p style="margin-bottom:1rem;color:#64748b;font-size:.85rem;">Export a JSON backup or restore from a previous backup file.</p>
@@ -1249,17 +1273,32 @@ async function viewWalletHistory(riderId,riderName){
 }
 function closeWalletHistoryModal(){ document.getElementById('walletHistoryModal').classList.remove('active'); }
 
-async function submitTopupRequest(){
-  const amount=v('myTopupAmount'), notes=v('myTopupNotes');
+async function startTopupPayment(){
+  const amount=v('myTopupAmount');
   if(!amount) return alert2('walletAlerts','Enter an amount','error');
   if(Number(amount)<=0) return alert2('walletAlerts','Amount must be greater than 0','error');
   spin(true);
   try{
+    const res=await API.getUpiTopupLink(amount, currentUser.userId);
+    if(!res.success) return alert2('walletAlerts',res.message||'Could not start payment.','error');
+    document.getElementById('topupSendApprovalBtn').disabled=false;
+    window.location.href=res.upiUrl;
+  }catch(e){ alert2('walletAlerts','Error: '+e.message,'error'); }
+  finally{ spin(false); }
+}
+async function submitTopupRequest(){
+  const amount=v('myTopupAmount'), notes=v('myTopupNotes');
+  if(!amount) return alert2('walletAlerts','Enter an amount','error');
+  if(Number(amount)<=0) return alert2('walletAlerts','Amount must be greater than 0','error');
+  if(!confirm('Send this top-up for admin approval? Only do this after you have completed the UPI payment.')) return;
+  spin(true);
+  try{
     const res=await API.requestWalletTopup(currentUser.userId, amount, notes);
     if(!res.success) return alert2('walletAlerts',res.message||'Could not submit request.','error');
-    alert2('walletAlerts','Top-up request submitted. Waiting for admin approval.','success');
+    alert2('walletAlerts','Top-up sent for admin approval.','success');
     document.getElementById('myTopupAmount').value='';
     document.getElementById('myTopupNotes').value='';
+    document.getElementById('topupSendApprovalBtn').disabled=true;
     await loadMyWallet();
   }catch(e){ alert2('walletAlerts','Error: '+e.message,'error'); }
   finally{ spin(false); }
@@ -1329,10 +1368,7 @@ function renderReport(rows, stats){
     const statusClass = r.PaymentStatus==='Paid' ? 'paid' : (r.PaymentStatus==='Pending Confirmation' ? 'pendingconfirmation' : 'pending');
     let action = '-';
     if(r.PaymentStatus==='Pending'){
-      action = `<div class="btn-group">
-          <button class="btn btn-purple" style="padding:.4rem .6rem;font-size:.72rem;" onclick="payViaUpi('${r.DetailID}')">Pay Now</button>
-          <button class="btn btn-info" style="padding:.4rem .6rem;font-size:.72rem;" onclick="reportPaymentDone('${r.DetailID}')">I've Paid — Send for Approval</button>
-        </div>`;
+      action = `<button class="btn btn-purple" style="padding:.4rem .7rem;font-size:.75rem;" onclick="openRiderPayModal('${r.DetailID}','${r.RiderName}',${r.RideAmount})">Pay Now</button>`;
     } else if(r.PaymentStatus==='Pending Confirmation'){
       action = currentUser.isAdmin
         ? `<div class="btn-group">
@@ -1358,14 +1394,48 @@ function renderReport(rows, stats){
   document.getElementById('rptOutstanding').textContent='₹'+Number(stats.outstandingAmount||0).toFixed(2);
   s.style.display='block';
 }
-async function payViaUpi(detailId){
-  spin(true);
-  try{
-    const res=await API.getUpiPaymentLink(detailId);
-    if(!res.success) return alert2('reportAlerts',res.message||'Could not start payment.','error');
-    window.location.href=res.upiUrl;
-  }catch(e){ alert2('reportAlerts','Error: '+e.message,'error'); }
-  finally{ spin(false); }
+
+/* ── RIDER SELF-PAYMENT MODAL (Wallet or UPI, no Cash) ── */
+function openRiderPayModal(detailId, riderName, amount){
+  document.getElementById('riderPayBody').innerHTML=`
+    <div class="qr-payment-card">
+      <div class="qr-payment-name">${riderName}</div>
+      <div class="qr-payment-amount">₹${Number(amount).toFixed(2)}</div>
+      <div class="payment-method-selector">
+        <button class="pm-btn" id="rp-wallet" onclick="selectRiderPayMethod('${detailId}','Wallet')">Pay via Wallet</button>
+        <button class="pm-btn" id="rp-upi" onclick="selectRiderPayMethod('${detailId}','UPI')">Pay via UPI</button>
+      </div>
+      <div id="riderPayUpiActions" style="display:none;margin-top:1rem;">
+        <button class="btn btn-info" style="width:100%;justify-content:center;" onclick="reportPaymentDone('${detailId}')">I've Paid — Send for Approval</button>
+      </div>
+    </div>`;
+  document.getElementById('riderPayModal').classList.add('active');
+}
+function closeRiderPayModal(){ document.getElementById('riderPayModal').classList.remove('active'); }
+async function selectRiderPayMethod(detailId, method){
+  document.querySelectorAll('#riderPayBody .pm-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById(method==='Wallet'?'rp-wallet':'rp-upi').classList.add('active');
+  if(method==='Wallet'){
+    if(!confirm('Pay this amount from your wallet balance now?')) return;
+    spin(true);
+    try{
+      const res=await API.payOutstandingViaWallet(detailId, currentUser.userId);
+      if(!res.success) return alert2('reportAlerts',res.message||'Could not pay from wallet.','error');
+      alert2('reportAlerts',`Paid from wallet. New balance: ₹${Number(res.newBalance).toFixed(2)}`,'success');
+      closeRiderPayModal();
+      await generateReport(); await refreshAll();
+    }catch(e){ alert2('reportAlerts','Error: '+e.message,'error'); }
+    finally{ spin(false); }
+  } else {
+    spin(true);
+    try{
+      const res=await API.getUpiPaymentLink(detailId);
+      if(!res.success) return alert2('reportAlerts',res.message||'Could not start payment.','error');
+      document.getElementById('riderPayUpiActions').style.display='block';
+      window.location.href=res.upiUrl;
+    }catch(e){ alert2('reportAlerts','Error: '+e.message,'error'); }
+    finally{ spin(false); }
+  }
 }
 async function reportPaymentDone(detailId){
   if(!confirm('Send this payment for admin approval? Only do this after you have completed the UPI payment.')) return;
@@ -1374,6 +1444,7 @@ async function reportPaymentDone(detailId){
     const res=await API.reportUpiPayment(detailId, currentUser.userId);
     if(!res.success) return alert2('reportAlerts',res.message||'Could not report payment.','error');
     alert2('reportAlerts','Payment reported. Waiting for admin confirmation.','success');
+    closeRiderPayModal();
     await generateReport();
   }catch(e){ alert2('reportAlerts','Error: '+e.message,'error'); }
   finally{ spin(false); }
@@ -1418,14 +1489,30 @@ function printReport(){
 }
 
 /* ── SETTINGS ── */
-function initSettings(){
+async function initSettings(){
   document.getElementById('adminDataSection').style.display=currentUser.isAdmin?'block':'none';
   document.getElementById('settingsCurrentPassword').value='';
   document.getElementById('settingsNewPassword').value='';
   document.getElementById('settingsConfirmPassword').value='';
   if(currentUser.isAdmin){
-    API.getSettings();
+    const res=await API.getSettings();
+    if(res.success){
+      document.getElementById('settingsUpiId').value=res.settings.UpiId||'';
+      document.getElementById('settingsUpiPayeeName').value=res.settings.UpiPayeeName||'';
+    }
   }
+}
+async function saveUpiSettings(){
+  const upiId=v('settingsUpiId'), payeeName=v('settingsUpiPayeeName');
+  if(!upiId) return alert2('settingsAlerts','Enter your UPI ID','error');
+  spin(true);
+  try{
+    const res1=await API.updateSettings('UpiId', upiId);
+    const res2=await API.updateSettings('UpiPayeeName', payeeName);
+    if(!res1.success||!res2.success) return alert2('settingsAlerts','Could not save UPI settings.','error');
+    alert2('settingsAlerts','UPI settings saved','success');
+  }catch(e){ alert2('settingsAlerts','Error: '+e.message,'error'); }
+  finally{ spin(false); }
 }
 async function updatePasswordWithCurrent(){
   const cp=v('settingsCurrentPassword'), np=v('settingsNewPassword'), cp2=v('settingsConfirmPassword');
