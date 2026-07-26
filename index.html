@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<meta name="description" content="CMS v5.0 - Carpool Management System with Journeys & Wallet">
+<meta name="description" content="RMS v5.0 - Ride Management System with Journeys & Wallet">
 <meta name="theme-color" content="#FF9500">
-<title>CMS - PM Carpool Management System</title>
+<title>RMS - Ride Management System</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="CMS">
+<meta name="apple-mobile-web-app-title" content="RMS">
 
 <script src="api.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
@@ -143,6 +143,7 @@ tbody tr:last-child td{border-bottom:none;}
 .badge-paid{background:var(--green-bg);color:var(--green);}
 .badge-balance{background:var(--red-bg);color:var(--red);}
 .badge-pending{background:var(--red-bg);color:var(--red);}
+.badge-pendingconfirmation{background:#fff7ed;color:var(--orange-dark);}
 .badge-active{background:var(--green-bg);color:var(--green);}
 .badge-inactive{background:#f1f3f7;color:#94a3b8;}
 .badge-draft{background:#f1f3f7;color:#64748b;}
@@ -259,8 +260,8 @@ tbody tr:last-child td{border-bottom:none;}
       <div class="login-logo-mark">
         <svg viewBox="0 0 24 24"><path d="M5 17h14M5 17a2 2 0 1 0 4 0M5 17a2 2 0 1 1 4 0m6 0a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0M5 17l1.5-7.5A2 2 0 0 1 8.45 8h7.1a2 2 0 0 1 1.95 1.5L19 17M3 17h2m14 0h2"/></svg>
       </div>
-      <h1>CMS</h1>
-      <p>PM Carpool  Management System</p>
+      <h1>RMS</h1>
+      <p>Ride Management System</p>
     </div>
     <div id="cloudNotice" class="cloud-notice" style="display:none;">
       <b>Setup Required:</b> The Apps Script backend is not configured.<br>
@@ -291,7 +292,7 @@ tbody tr:last-child td{border-bottom:none;}
       <button class="menu-btn" onclick="toggleDrawer(true)"><svg viewBox="0 0 24 24"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
       <div class="brand">
         <div class="brand-mark"><svg viewBox="0 0 24 24"><path d="M5 17h14M5 17a2 2 0 1 0 4 0M5 17a2 2 0 1 1 4 0m6 0a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0M5 17l1.5-7.5A2 2 0 0 1 8.45 8h7.1a2 2 0 0 1 1.95 1.5L19 17M3 17h2m14 0h2"/></svg></div>
-        <div>CMS <small>Carpool Management</small></div>
+        <div>RMS <small>Ride Management</small></div>
       </div>
     </div>
     <div class="nav-row" id="desktopNav"></div>
@@ -519,6 +520,11 @@ tbody tr:last-child td{border-bottom:none;}
 
       <div id="walletAdminView">
         <div class="card">
+          <div class="card-title"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Pending Top-up Requests</div>
+          <div class="table-wrap"><table><thead><tr><th>Rider</th><th>Amount</th><th>Requested</th><th>Notes</th><th>Actions</th></tr></thead><tbody id="walletRequestsTableBody"><tr><td colspan="5" class="empty-state">No pending requests</td></tr></tbody></table></div>
+        </div>
+
+        <div class="card">
           <div class="card-title"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add Funds to Rider Wallet</div>
           <div class="form-row">
             <div class="fg"><label>Rider <span class="req">*</span></label><select id="walletRiderSelect"><option value="">-- Select Rider --</option></select></div>
@@ -545,9 +551,22 @@ tbody tr:last-child td{border-bottom:none;}
           <div class="wv" id="myWalletBalance">₹0.00</div>
           <div class="wr">Use this balance to pay for journeys instantly</div>
         </div>
+
+        <div class="card">
+          <div class="card-title"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Request Top-up</div>
+          <p style="color:#94a3b8;font-size:.82rem;margin-bottom:1rem;">Submit a request — admin will review and add funds to your wallet once approved.</p>
+          <div class="form-row">
+            <div class="fg"><label>Amount (₹) <span class="req">*</span></label><input type="number" id="myTopupAmount" placeholder="0.00" step="0.01" min="0"></div>
+            <div class="fg"><label>Notes</label><input type="text" id="myTopupNotes" placeholder="e.g. Paid via UPI on 26 Jul"></div>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-purple" onclick="submitTopupRequest()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Submit Request</button>
+          </div>
+        </div>
+
         <div class="card">
           <div class="card-title"><svg viewBox="0 0 24 24"><path d="M4 19h16M4 19V5h16v14"/></svg>Transaction History</div>
-          <div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Purpose</th></tr></thead><tbody id="myWalletTxnBody"><tr><td colspan="4" class="empty-state">No transactions yet</td></tr></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Purpose</th><th>Status</th></tr></thead><tbody id="myWalletTxnBody"><tr><td colspan="5" class="empty-state">No transactions yet</td></tr></tbody></table></div>
         </div>
       </div>
 
@@ -638,7 +657,7 @@ tbody tr:last-child td{border-bottom:none;}
       <div class="card">
         <div class="card-title"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>About</div>
         <table style="width:100%;font-size:.85rem;">
-          <tr style="border-bottom:1px solid #f1f3f7;"><td style="padding:.5rem;color:#64748b;">App</td><td style="padding:.5rem;font-weight:600;">Carpool Management System (CMS)</td></tr>
+          <tr style="border-bottom:1px solid #f1f3f7;"><td style="padding:.5rem;color:#64748b;">App</td><td style="padding:.5rem;font-weight:600;">Ride Management System (RMS)</td></tr>
           <tr style="border-bottom:1px solid #f1f3f7;"><td style="padding:.5rem;color:#64748b;">Version</td><td style="padding:.5rem;font-weight:600;">5.0 — Journey & Wallet Edition</td></tr>
           <tr><td style="padding:.5rem;color:#64748b;">Platform</td><td style="padding:.5rem;font-weight:600;">Google Sheets via Apps Script</td></tr>
         </table>
@@ -653,7 +672,7 @@ tbody tr:last-child td{border-bottom:none;}
 
 <script>
 /* ============================================================
-   CMS v5.0 — Journey & Wallet Edition
+   RMS v5.0 — Journey & Wallet Edition
    ============================================================ */
 
 let currentUser = null;
@@ -1133,6 +1152,7 @@ async function loadWalletModule(){
     document.getElementById('walletRiderView').style.display='none';
     await loadWalletRiderDropdown();
     await loadAllWallets();
+    await loadPendingWalletRequests();
   } else {
     document.getElementById('walletAdminView').style.display='none';
     document.getElementById('walletRiderView').style.display='block';
@@ -1144,6 +1164,45 @@ async function loadWalletRiderDropdown(){
   const riders=res.success?(res.riders||[]):[];
   const sel=document.getElementById('walletRiderSelect');
   sel.innerHTML='<option value="">-- Select Rider --</option>'+riders.map(r=>`<option value="${r.RiderId}">${r.Name} (${r.RiderId})</option>`).join('');
+}
+async function loadPendingWalletRequests(){
+  const res=await API.getPendingWalletRequests();
+  if(!res.success){ alert2('walletAlerts',res.message||'Could not load requests.','error'); return; }
+  const reqs=res.requests||[];
+  document.getElementById('walletRequestsTableBody').innerHTML=reqs.length
+    ? reqs.map(r=>`<tr>
+        <td><strong>${r.RiderId}</strong></td>
+        <td>₹${Number(r.Amount).toFixed(2)}</td>
+        <td>${new Date(r.CreatedAt).toLocaleString()}</td>
+        <td>${r.Notes||'-'}</td>
+        <td><div class="btn-group">
+          <button class="btn btn-success" style="padding:.4rem .6rem;font-size:.72rem;" onclick="approveTopupRequest('${r.TransactionID}')">Approve</button>
+          <button class="btn btn-danger" style="padding:.4rem .6rem;font-size:.72rem;" onclick="rejectTopupRequest('${r.TransactionID}')">Reject</button>
+        </div></td>
+      </tr>`).join('')
+    : '<tr><td colspan="5" class="empty-state">No pending requests</td></tr>';
+}
+async function approveTopupRequest(transactionId){
+  if(!confirm('Approve this top-up request? Funds will be added to the rider wallet.')) return;
+  spin(true);
+  try{
+    const res=await API.approveWalletTopupRequest(transactionId, currentUser.isAdmin);
+    if(!res.success) return alert2('walletAlerts',res.message||'Could not approve request.','error');
+    alert2('walletAlerts',`Request approved. New balance: ₹${Number(res.newBalance).toFixed(2)}`,'success');
+    await loadPendingWalletRequests(); await loadAllWallets(); await refreshAll();
+  }catch(e){ alert2('walletAlerts','Error: '+e.message,'error'); }
+  finally{ spin(false); }
+}
+async function rejectTopupRequest(transactionId){
+  if(!confirm('Reject this top-up request?')) return;
+  spin(true);
+  try{
+    const res=await API.rejectWalletTopupRequest(transactionId, currentUser.isAdmin);
+    if(!res.success) return alert2('walletAlerts',res.message||'Could not reject request.','error');
+    alert2('walletAlerts','Request rejected','info');
+    await loadPendingWalletRequests();
+  }catch(e){ alert2('walletAlerts','Error: '+e.message,'error'); }
+  finally{ spin(false); }
 }
 async function loadAllWallets(){
   const res=await API.getAllWallets();
@@ -1190,6 +1249,26 @@ async function viewWalletHistory(riderId,riderName){
 }
 function closeWalletHistoryModal(){ document.getElementById('walletHistoryModal').classList.remove('active'); }
 
+async function submitTopupRequest(){
+  const amount=v('myTopupAmount'), notes=v('myTopupNotes');
+  if(!amount) return alert2('walletAlerts','Enter an amount','error');
+  if(Number(amount)<=0) return alert2('walletAlerts','Amount must be greater than 0','error');
+  spin(true);
+  try{
+    const res=await API.requestWalletTopup(currentUser.userId, amount, notes);
+    if(!res.success) return alert2('walletAlerts',res.message||'Could not submit request.','error');
+    alert2('walletAlerts','Top-up request submitted. Waiting for admin approval.','success');
+    document.getElementById('myTopupAmount').value='';
+    document.getElementById('myTopupNotes').value='';
+    await loadMyWallet();
+  }catch(e){ alert2('walletAlerts','Error: '+e.message,'error'); }
+  finally{ spin(false); }
+}
+function walletStatusBadge(status){
+  if(status==='Pending') return 'pendingconfirmation';
+  if(status==='Rejected') return 'balance';
+  return 'paid'; // Success / Approved
+}
 async function loadMyWallet(){
   spin(true);
   try{
@@ -1198,8 +1277,8 @@ async function loadMyWallet(){
     const txRes=await API.getWalletTransactions(currentUser.userId);
     const txns=txRes.success?(txRes.transactions||[]):[];
     document.getElementById('myWalletTxnBody').innerHTML=txns.length
-      ? txns.map(t=>`<tr><td>${new Date(t.CreatedAt).toLocaleDateString()}</td><td><span class="badge badge-${t.Type==='In'?'paid':'balance'}">${t.Type}</span></td><td>₹${Number(t.Amount).toFixed(2)}</td><td>${t.Purpose}</td></tr>`).join('')
-      : '<tr><td colspan="4" class="empty-state">No transactions yet</td></tr>';
+      ? txns.map(t=>`<tr><td>${new Date(t.CreatedAt).toLocaleDateString()}</td><td><span class="badge badge-${t.Type==='In'?'paid':'balance'}">${t.Type}</span></td><td>₹${Number(t.Amount).toFixed(2)}</td><td>${t.Purpose}</td><td><span class="badge badge-${walletStatusBadge(t.Status)}">${t.Status||'Success'}</span></td></tr>`).join('')
+      : '<tr><td colspan="5" class="empty-state">No transactions yet</td></tr>';
   }catch(e){ alert2('walletAlerts','Error: '+e.message,'error'); }
   finally{ spin(false); }
 }
@@ -1247,7 +1326,18 @@ function renderReport(rows, stats){
   const c=document.getElementById('reportContainer'), s=document.getElementById('reportStats');
   if(!rows.length){ c.style.display='none'; s.style.display='none'; alert2('reportAlerts','No journeys found','info'); return; }
   document.getElementById('reportTableBody').innerHTML=rows.map(r=>{
-    const statusClass = r.PaymentStatus==='Paid' ? 'paid' : 'pending';
+    const statusClass = r.PaymentStatus==='Paid' ? 'paid' : (r.PaymentStatus==='Pending Confirmation' ? 'pendingconfirmation' : 'pending');
+    let action = '-';
+    if(r.PaymentStatus==='Pending'){
+      action = `<button class="btn btn-purple" style="padding:.4rem .7rem;font-size:.75rem;" onclick="payViaUpi('${r.DetailID}')">Pay Now</button>`;
+    } else if(r.PaymentStatus==='Pending Confirmation'){
+      action = currentUser.isAdmin
+        ? `<div class="btn-group">
+             <button class="btn btn-success" style="padding:.4rem .6rem;font-size:.72rem;" onclick="approveUpiReport('${r.DetailID}')">Approve</button>
+             <button class="btn btn-danger" style="padding:.4rem .6rem;font-size:.72rem;" onclick="rejectUpiReport('${r.DetailID}')">Reject</button>
+           </div>`
+        : `<span style="font-size:.78rem;color:#94a3b8;">Awaiting confirmation</span>`;
+    }
     return `<tr>
       <td>${r.JourneyDate}</td>
       <td>${r.Session}</td>
@@ -1255,7 +1345,7 @@ function renderReport(rows, stats){
       <td>₹${Number(r.RideAmount).toFixed(2)}</td>
       <td><span class="badge badge-${statusClass}">${r.PaymentStatus}</span></td>
       <td>${r.PaymentMethod||'-'}</td>
-      <td>${r.PaymentStatus!=='Paid' ? `<button class="btn btn-purple" style="padding:.4rem .7rem;font-size:.75rem;" onclick="payViaUpi('${r.DetailID}')">Pay Now</button>` : '-'}</td>
+      <td>${action}</td>
     </tr>`;
   }).join('');
   c.style.display='block';
@@ -1271,6 +1361,44 @@ async function payViaUpi(detailId){
     const res=await API.getUpiPaymentLink(detailId);
     if(!res.success) return alert2('reportAlerts',res.message||'Could not start payment.','error');
     window.location.href=res.upiUrl;
+    // Give the UPI app a moment to open, then prompt to self-report.
+    setTimeout(()=>{
+      if(confirm('If you completed the payment, click OK to mark it as paid (pending admin confirmation).')){
+        reportPaymentDone(detailId);
+      }
+    }, 1500);
+  }catch(e){ alert2('reportAlerts','Error: '+e.message,'error'); }
+  finally{ spin(false); }
+}
+async function reportPaymentDone(detailId){
+  spin(true);
+  try{
+    const res=await API.reportUpiPayment(detailId, currentUser.userId);
+    if(!res.success) return alert2('reportAlerts',res.message||'Could not report payment.','error');
+    alert2('reportAlerts','Payment reported. Waiting for admin confirmation.','success');
+    await generateReport();
+  }catch(e){ alert2('reportAlerts','Error: '+e.message,'error'); }
+  finally{ spin(false); }
+}
+async function approveUpiReport(detailId){
+  if(!confirm('Confirm this payment was received?')) return;
+  spin(true);
+  try{
+    const res=await API.approveUpiPayment(detailId, currentUser.isAdmin);
+    if(!res.success) return alert2('reportAlerts',res.message||'Could not approve payment.','error');
+    alert2('reportAlerts','Payment confirmed as Paid','success');
+    await generateReport(); await refreshAll();
+  }catch(e){ alert2('reportAlerts','Error: '+e.message,'error'); }
+  finally{ spin(false); }
+}
+async function rejectUpiReport(detailId){
+  if(!confirm('Reject this payment report? It will go back to Pending.')) return;
+  spin(true);
+  try{
+    const res=await API.rejectUpiPayment(detailId, currentUser.isAdmin);
+    if(!res.success) return alert2('reportAlerts',res.message||'Could not reject payment.','error');
+    alert2('reportAlerts','Payment report rejected — back to Pending','info');
+    await generateReport();
   }catch(e){ alert2('reportAlerts','Error: '+e.message,'error'); }
   finally{ spin(false); }
 }
@@ -1278,7 +1406,7 @@ function exportReportPDF(){
   const el=document.getElementById('reportContainer');
   if(!el||el.style.display==='none') return alert2('reportAlerts','Generate report first','error');
   const wrap=document.createElement('div');
-  wrap.innerHTML=`<h2 style="font-family:sans-serif;margin-bottom:1rem;">CMS Journey Report — ${new Date().toLocaleDateString()}</h2>`+el.innerHTML+
+  wrap.innerHTML=`<h2 style="font-family:sans-serif;margin-bottom:1rem;">RMS Journey Report — ${new Date().toLocaleDateString()}</h2>`+el.innerHTML+
     `<p style="font-family:sans-serif;margin-top:1rem;">Total: ${document.getElementById('rptAmount').textContent} | Paid: ${document.getElementById('rptPaid').textContent} | Outstanding: ${document.getElementById('rptOutstanding').textContent}</p>`;
   html2pdf().set({margin:10,filename:'rms_report_'+Date.now()+'.pdf',image:{type:'jpeg',quality:.98},html2canvas:{scale:2},jsPDF:{orientation:'landscape',unit:'mm',format:'a4'}}).from(wrap).save();
   alert2('reportAlerts','PDF exported','success');
@@ -1287,7 +1415,7 @@ function printReport(){
   const el=document.getElementById('reportContainer');
   if(!el||el.style.display==='none') return alert2('reportAlerts','Generate report first','error');
   const w=window.open('','','width=1100,height=700');
-  w.document.write('<html><head><title>CMS Report</title><style>body{font-family:Arial;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ddd;padding:8px;text-align:left;}</style></head><body>'+el.innerHTML+'</body></html>');
+  w.document.write('<html><head><title>RMS Report</title><style>body{font-family:Arial;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ddd;padding:8px;text-align:left;}</style></head><body>'+el.innerHTML+'</body></html>');
   w.document.close(); w.print();
 }
 
