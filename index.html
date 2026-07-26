@@ -1329,7 +1329,10 @@ function renderReport(rows, stats){
     const statusClass = r.PaymentStatus==='Paid' ? 'paid' : (r.PaymentStatus==='Pending Confirmation' ? 'pendingconfirmation' : 'pending');
     let action = '-';
     if(r.PaymentStatus==='Pending'){
-      action = `<button class="btn btn-purple" style="padding:.4rem .7rem;font-size:.75rem;" onclick="payViaUpi('${r.DetailID}')">Pay Now</button>`;
+      action = `<div class="btn-group">
+          <button class="btn btn-purple" style="padding:.4rem .6rem;font-size:.72rem;" onclick="payViaUpi('${r.DetailID}')">Pay Now</button>
+          <button class="btn btn-info" style="padding:.4rem .6rem;font-size:.72rem;" onclick="reportPaymentDone('${r.DetailID}')">I've Paid — Send for Approval</button>
+        </div>`;
     } else if(r.PaymentStatus==='Pending Confirmation'){
       action = currentUser.isAdmin
         ? `<div class="btn-group">
@@ -1361,16 +1364,11 @@ async function payViaUpi(detailId){
     const res=await API.getUpiPaymentLink(detailId);
     if(!res.success) return alert2('reportAlerts',res.message||'Could not start payment.','error');
     window.location.href=res.upiUrl;
-    // Give the UPI app a moment to open, then prompt to self-report.
-    setTimeout(()=>{
-      if(confirm('If you completed the payment, click OK to mark it as paid (pending admin confirmation).')){
-        reportPaymentDone(detailId);
-      }
-    }, 1500);
   }catch(e){ alert2('reportAlerts','Error: '+e.message,'error'); }
   finally{ spin(false); }
 }
 async function reportPaymentDone(detailId){
+  if(!confirm('Send this payment for admin approval? Only do this after you have completed the UPI payment.')) return;
   spin(true);
   try{
     const res=await API.reportUpiPayment(detailId, currentUser.userId);
