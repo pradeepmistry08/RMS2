@@ -77,6 +77,10 @@ window.API = {
   getWallet:        (riderId)                     => apiCall('getWallet', { riderId }, 'GET'),
   getAllWallets:    ()                             => apiCall('getAllWallets', {}, 'GET'),
   addWalletFunds:   (riderId, amount, purpose, notes) => apiCall('addWalletFunds', { riderId, amount, purpose, notes }, 'POST'),
+  requestWalletTopup: (riderId, amount, notes)     => apiCall('requestWalletTopup', { riderId, amount, notes }, 'POST'),
+  getPendingWalletRequests: ()                     => apiCall('getPendingWalletRequests', {}, 'GET'),
+  approveWalletTopupRequest: (transactionId, isAdmin) => apiCall('approveWalletTopupRequest', { transactionId, isAdmin }, 'POST'),
+  rejectWalletTopupRequest: (transactionId, isAdmin)  => apiCall('rejectWalletTopupRequest', { transactionId, isAdmin }, 'POST'),
   deductWallet:     (riderId, amount, purpose, journeyId) => apiCall('deductWallet', { riderId, amount, purpose, journeyId }, 'POST'),
   getWalletTransactions: (riderId)                 => apiCall('getWalletTransactions', { riderId }, 'GET'),
 
@@ -87,6 +91,9 @@ window.API = {
   // QR
   getQRPaymentData: (journeyId, riderId)           => apiCall('getQRPaymentData', { journeyId, riderId }, 'GET'),
   getUpiPaymentLink: (detailId)                    => apiCall('getUpiPaymentLink', { detailId }, 'GET'),
+  reportUpiPayment: (detailId, riderId)            => apiCall('reportUpiPayment', { detailId, riderId }, 'POST'),
+  approveUpiPayment: (detailId, isAdmin)           => apiCall('approveUpiPayment', { detailId, isAdmin }, 'POST'),
+  rejectUpiPayment: (detailId, isAdmin)            => apiCall('rejectUpiPayment', { detailId, isAdmin }, 'POST'),
 
   // Reports — rider-specific rows for riders, org-wide for admins.
   // dateFrom/dateTo are plain 'YYYY-MM-DD' strings; statusFilter is 'outstanding' or omitted.
