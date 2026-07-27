@@ -592,7 +592,7 @@ tbody tr:last-child td{border-bottom:none;}
         <div class="card-title"><svg viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>Report Filters</div>
         <div class="form-row">
           <div class="fg"><label>Search By</label>
-            <select id="reportSearchType" onchange="updateReportFilters()"><option value="month">By Month</option><option value="all">All Journeys</option><option value="outstanding">Outstanding Only</option><option value="daterange">Date Range</option></select>
+            <select id="reportSearchType" onchange="updateReportFilters()"><option value="month">By Month</option><option value="Rider">By Rider</option><option value="all">All Journeys</option><option value="outstanding">Outstanding Only</option><option value="daterange">Date Range</option></select>
           </div>
           <div class="fg" id="monthFG"><label>Month</label><input type="month" id="reportMonth" onchange="generateReport()"></div>
           <div class="fg" id="fromFG" style="display:none;"><label>From Date</label><input type="date" id="reportFromDate" onchange="generateReport()"></div>
