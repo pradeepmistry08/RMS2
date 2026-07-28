@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<meta name="description" content="CMS v5.0 - Carpool Management System with Journeys & Wallet">
+<meta name="description" content="RMS v5.0 - Ride Management System with Journeys & Wallet">
 <meta name="theme-color" content="#FF9500">
-<title>CMS - Carpool Management System (Designed by Pradeep Mistry)</title>
+<title>RMS - Ride Management System</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="CMS">
+<meta name="apple-mobile-web-app-title" content="RMS">
 
 <script src="api.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
@@ -260,9 +260,8 @@ tbody tr:last-child td{border-bottom:none;}
       <div class="login-logo-mark">
         <svg viewBox="0 0 24 24"><path d="M5 17h14M5 17a2 2 0 1 0 4 0M5 17a2 2 0 1 1 4 0m6 0a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0M5 17l1.5-7.5A2 2 0 0 1 8.45 8h7.1a2 2 0 0 1 1.95 1.5L19 17M3 17h2m14 0h2"/></svg>
       </div>
-      <h1>CMS</h1>
-      <p>Carpool Management System</p>
-      <p>(designed by Pradeep Mistry)</p>
+      <h1>RMS</h1>
+      <p>Ride Management System</p>
     </div>
     <div id="cloudNotice" class="cloud-notice" style="display:none;">
       <b>Setup Required:</b> The Apps Script backend is not configured.<br>
@@ -293,7 +292,7 @@ tbody tr:last-child td{border-bottom:none;}
       <button class="menu-btn" onclick="toggleDrawer(true)"><svg viewBox="0 0 24 24"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
       <div class="brand">
         <div class="brand-mark"><svg viewBox="0 0 24 24"><path d="M5 17h14M5 17a2 2 0 1 0 4 0M5 17a2 2 0 1 1 4 0m6 0a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0M5 17l1.5-7.5A2 2 0 0 1 8.45 8h7.1a2 2 0 0 1 1.95 1.5L19 17M3 17h2m14 0h2"/></svg></div>
-        <div>CMS <small>Carpool Management</small></div>
+        <div>RMS <small>Ride Management</small></div>
       </div>
     </div>
     <div class="nav-row" id="desktopNav"></div>
@@ -588,32 +587,70 @@ tbody tr:last-child td{border-bottom:none;}
         <div><div class="section-title">My Reports</div><div class="section-subtitle">View and analyze journey transactions</div></div>
       </div>
       <div id="reportAlerts"></div>
-      <div class="card">
-        <div class="card-title"><svg viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>Report Filters</div>
-        <div class="form-row">
-          <div class="fg"><label>Search By</label>
-            <select id="reportSearchType" onchange="updateReportFilters()"><option value="month">By Month</option><option value="all">All Journeys</option><option value="outstanding">Outstanding Only</option><option value="daterange">Date Range</option></select>
+
+      <div class="cat-selector" id="reportCatSelector" style="display:none;">
+        <button class="cat-btn active" onclick="setReportCat('journey',this)"><svg viewBox="0 0 24 24"><path d="M5 17h14M5 17a2 2 0 1 0 4 0M5 17a2 2 0 1 1 4 0m6 0a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0M5 17l1.5-7.5A2 2 0 0 1 8.45 8h7.1a2 2 0 0 1 1.95 1.5L19 17"/></svg>Journey Report</button>
+        <button class="cat-btn" onclick="setReportCat('wallet',this)"><svg viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg>Wallet Report</button>
+      </div>
+
+      <div id="journeyReportSec">
+        <div class="card">
+          <div class="card-title"><svg viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>Report Filters</div>
+          <div class="form-row">
+            <div class="fg" id="reportRiderFG" style="display:none;"><label>Rider</label>
+              <select id="reportRiderFilter" onchange="generateReport()"><option value="">All Riders</option></select>
+            </div>
+            <div class="fg"><label>Status</label>
+              <select id="reportSearchType" onchange="generateReport()"><option value="all">All</option><option value="outstanding">Outstanding Only</option></select>
+            </div>
+            <div class="fg"><label>From Date</label><input type="date" id="reportFromDate" onchange="generateReport()"></div>
+            <div class="fg"><label>To Date</label><input type="date" id="reportToDate" onchange="generateReport()"></div>
           </div>
-          <div class="fg" id="monthFG"><label>Month</label><input type="month" id="reportMonth" onchange="generateReport()"></div>
-          <div class="fg" id="fromFG" style="display:none;"><label>From Date</label><input type="date" id="reportFromDate" onchange="generateReport()"></div>
-          <div class="fg" id="toFG" style="display:none;"><label>To Date</label><input type="date" id="reportToDate" onchange="generateReport()"></div>
+          <div class="btn-group">
+            <button class="btn btn-primary" onclick="generateReport()">Generate Report</button>
+            <button class="btn btn-success" onclick="exportReportPDF()">Export PDF</button>
+            <button class="btn btn-info" onclick="printReport()">Print</button>
+          </div>
         </div>
-        <div class="btn-group">
-          <button class="btn btn-primary" onclick="generateReport()">Generate Report</button>
-          <button class="btn btn-success" onclick="exportReportPDF()">Export PDF</button>
-          <button class="btn btn-info" onclick="printReport()">Print</button>
+        <div id="reportContainer" class="card" style="display:none;">
+          <div class="card-title"><svg viewBox="0 0 24 24"><path d="M4 19h16M4 19V5h16v14"/></svg>Journey Details</div>
+          <div class="table-wrap"><table><thead><tr><th>Date</th><th>Session</th><th>Rider</th><th>Amount (₹)</th><th>Status</th><th>Method</th><th>Action</th></tr></thead><tbody id="reportTableBody"></tbody></table></div>
+        </div>
+        <div id="reportStats" style="display:none;">
+          <div class="stats-grid">
+            <div class="stat-card c2"><div class="stat-label">Total Journeys</div><div class="stat-value" id="rptTotal">0</div></div>
+            <div class="stat-card c1"><div class="stat-label">Total Amount</div><div class="stat-value" id="rptAmount">₹0</div></div>
+            <div class="stat-card c3"><div class="stat-label">Total Paid</div><div class="stat-value" id="rptPaid">₹0</div></div>
+            <div class="stat-card c4"><div class="stat-label">Outstanding</div><div class="stat-value" id="rptOutstanding">₹0</div></div>
+          </div>
         </div>
       </div>
-      <div id="reportContainer" class="card" style="display:none;">
-        <div class="card-title"><svg viewBox="0 0 24 24"><path d="M4 19h16M4 19V5h16v14"/></svg>Journey Details</div>
-        <div class="table-wrap"><table><thead><tr><th>Date</th><th>Session</th><th>Rider</th><th>Amount (₹)</th><th>Status</th><th>Method</th><th>Action</th></tr></thead><tbody id="reportTableBody"></tbody></table></div>
-      </div>
-      <div id="reportStats" style="display:none;">
-        <div class="stats-grid">
-          <div class="stat-card c2"><div class="stat-label">Total Journeys</div><div class="stat-value" id="rptTotal">0</div></div>
-          <div class="stat-card c1"><div class="stat-label">Total Amount</div><div class="stat-value" id="rptAmount">₹0</div></div>
-          <div class="stat-card c3"><div class="stat-label">Total Paid</div><div class="stat-value" id="rptPaid">₹0</div></div>
-          <div class="stat-card c4"><div class="stat-label">Outstanding</div><div class="stat-value" id="rptOutstanding">₹0</div></div>
+
+      <div id="walletReportSec" style="display:none;">
+        <div class="card">
+          <div class="card-title"><svg viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>Wallet Report Filters</div>
+          <div class="form-row">
+            <div class="fg" id="walletReportRiderFG" style="display:none;"><label>Rider</label>
+              <select id="walletReportRiderFilter" onchange="generateWalletReport()"><option value="">All Riders</option></select>
+            </div>
+            <div class="fg"><label>From Date</label><input type="date" id="walletReportFromDate" onchange="generateWalletReport()"></div>
+            <div class="fg"><label>To Date</label><input type="date" id="walletReportToDate" onchange="generateWalletReport()"></div>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-primary" onclick="generateWalletReport()">Generate Report</button>
+          </div>
+        </div>
+        <div id="walletReportContainer" class="card" style="display:none;">
+          <div class="card-title"><svg viewBox="0 0 24 24"><path d="M4 19h16M4 19V5h16v14"/></svg>Wallet Transactions</div>
+          <div class="table-wrap"><table><thead><tr><th>Date</th><th>Rider</th><th>Type</th><th>Amount (₹)</th><th>Purpose</th><th>Status</th></tr></thead><tbody id="walletReportTableBody"></tbody></table></div>
+        </div>
+        <div id="walletReportStats" style="display:none;">
+          <div class="stats-grid">
+            <div class="stat-card c2"><div class="stat-label">Total Transactions</div><div class="stat-value" id="wrptTotal">0</div></div>
+            <div class="stat-card c3"><div class="stat-label">Total In</div><div class="stat-value" id="wrptIn">₹0</div></div>
+            <div class="stat-card c4"><div class="stat-label">Total Out</div><div class="stat-value" id="wrptOut">₹0</div></div>
+            <div class="stat-card c1"><div class="stat-label">Net</div><div class="stat-value" id="wrptNet">₹0</div></div>
+          </div>
         </div>
       </div>
 
@@ -643,7 +680,7 @@ tbody tr:last-child td{border-bottom:none;}
           <p style="margin-bottom:1rem;color:#64748b;font-size:.85rem;">Riders paying via "Pay Now" or wallet top-up will be directed to this UPI ID.</p>
           <div class="form-row">
             <div class="fg"><label>Your UPI ID <span class="req">*</span></label><input type="text" id="settingsUpiId" placeholder="e.g. yourname@okhdfcbank"></div>
-            <div class="fg"><label>Payee Display Name</label><input type="text" id="settingsUpiPayeeName" placeholder="e.g. CMS Admin"></div>
+            <div class="fg"><label>Payee Display Name</label><input type="text" id="settingsUpiPayeeName" placeholder="e.g. RMS Admin"></div>
           </div>
           <div class="btn-group">
             <button class="btn btn-primary" onclick="saveUpiSettings()">Save UPI Settings</button>
@@ -682,7 +719,7 @@ tbody tr:last-child td{border-bottom:none;}
       <div class="card">
         <div class="card-title"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>About</div>
         <table style="width:100%;font-size:.85rem;">
-          <tr style="border-bottom:1px solid #f1f3f7;"><td style="padding:.5rem;color:#64748b;">App</td><td style="padding:.5rem;font-weight:600;">Carpool Management System (CMS)</td></tr>
+          <tr style="border-bottom:1px solid #f1f3f7;"><td style="padding:.5rem;color:#64748b;">App</td><td style="padding:.5rem;font-weight:600;">Ride Management System (RMS)</td></tr>
           <tr style="border-bottom:1px solid #f1f3f7;"><td style="padding:.5rem;color:#64748b;">Version</td><td style="padding:.5rem;font-weight:600;">5.0 — Journey & Wallet Edition</td></tr>
           <tr><td style="padding:.5rem;color:#64748b;">Platform</td><td style="padding:.5rem;font-weight:600;">Google Sheets via Apps Script</td></tr>
         </table>
@@ -697,7 +734,7 @@ tbody tr:last-child td{border-bottom:none;}
 
 <script>
 /* ============================================================
-   CMS v5.0 — Journey & Wallet Edition
+   RMS v5.0 — Journey & Wallet Edition
    ============================================================ */
 
 let currentUser = null;
@@ -1139,7 +1176,7 @@ async function openQRModal(journeyId,riderId,detailId){
         <div class="payment-method-selector">
           <button class="pm-btn" id="pm-wallet" onclick="selectPaymentMethod('Wallet')">Wallet</button>
           <button class="pm-btn" id="pm-upi" onclick="selectPaymentMethod('UPI')">UPI/Card</button>
-          <button class="pm-btn" id="pm-cash" onclick="selectPaymentMethod('Cash')">Sride/Cash</button>
+          <button class="pm-btn" id="pm-cash" onclick="selectPaymentMethod('Cash')">Cash</button>
         </div>
       </div>
       <div class="btn-group" style="justify-content:center;margin-top:1rem;">
@@ -1324,39 +1361,44 @@ async function loadMyWallet(){
 }
 
 /* ── REPORTS ── */
-function initReportFilters(){
-  const now=new Date();
-  document.getElementById('reportMonth').value=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+async function initReportFilters(){
+  document.getElementById('reportCatSelector').style.display=currentUser.isAdmin?'flex':'none';
+  setReportCat('journey', document.querySelectorAll('#reportCatSelector .cat-btn')[0]);
+  const riderFG=document.getElementById('reportRiderFG');
+  if(currentUser.isAdmin){
+    riderFG.style.display='block';
+    const res=await API.getRiders();
+    const riders=res.success?(res.riders||[]):[];
+    const opts='<option value="">All Riders</option>'+riders.map(r=>`<option value="${r.RiderId}">${r.Name} (${r.RiderId})</option>`).join('');
+    document.getElementById('reportRiderFilter').innerHTML=opts;
+    document.getElementById('walletReportRiderFG').style.display='block';
+    document.getElementById('walletReportRiderFilter').innerHTML=opts;
+  } else {
+    riderFG.style.display='none';
+  }
+  document.getElementById('reportFromDate').value='';
+  document.getElementById('reportToDate').value='';
+  document.getElementById('reportSearchType').value='all';
   generateReport();
 }
-function updateReportFilters(){
-  const t=v('reportSearchType');
-  document.getElementById('monthFG').style.display=t==='month'?'block':'none';
-  document.getElementById('fromFG').style.display=t==='daterange'?'block':'none';
-  document.getElementById('toFG').style.display=t==='daterange'?'block':'none';
-  generateReport();
+function setReportCat(cat,btn){
+  document.querySelectorAll('#reportCatSelector .cat-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  document.getElementById('journeyReportSec').style.display=cat==='journey'?'block':'none';
+  document.getElementById('walletReportSec').style.display=cat==='wallet'?'block':'none';
+  if(cat==='wallet'){
+    document.getElementById('walletReportFromDate').value='';
+    document.getElementById('walletReportToDate').value='';
+    generateWalletReport();
+  }
 }
 async function generateReport(){
-  const type=v('reportSearchType');
+  const statusFilter = v('reportSearchType')==='outstanding' ? 'outstanding' : '';
+  const dateFrom = v('reportFromDate'), dateTo = v('reportToDate');
+  const filterRiderId = currentUser.isAdmin ? v('reportRiderFilter') : '';
   spin(true);
   try{
-    let dateFrom='', dateTo='', statusFilter='';
-    if(type==='month'){
-      const m=v('reportMonth'); if(!m){spin(false);return;}
-      const [y,mo]=m.split('-');
-      dateFrom=`${y}-${mo}-01`;
-      // last day of month, computed correctly regardless of month length
-      const lastDay=new Date(Number(y), Number(mo), 0).getDate();
-      dateTo=`${y}-${mo}-${String(lastDay).padStart(2,'0')}`;
-    } else if(type==='daterange'){
-      const f=v('reportFromDate'), to=v('reportToDate');
-      if(!f||!to){spin(false);return;}
-      dateFrom=f; dateTo=to;
-    } else if(type==='outstanding'){
-      statusFilter='outstanding';
-    }
-    // type==='all': no date/status filters
-    const res=await API.getMyReport(currentUser.isAdmin, currentUser.userId, dateFrom, dateTo, statusFilter);
+    const res=await API.getMyReport(currentUser.isAdmin, currentUser.userId, dateFrom, dateTo, statusFilter, filterRiderId);
     if(!res.success){ alert2('reportAlerts',res.message||'Could not generate report.','error'); return; }
     renderReport(res.rows||[], res.stats||{});
   }catch(e){ alert2('reportAlerts','Error: '+e.message,'error'); }
@@ -1476,7 +1518,7 @@ function exportReportPDF(){
   const el=document.getElementById('reportContainer');
   if(!el||el.style.display==='none') return alert2('reportAlerts','Generate report first','error');
   const wrap=document.createElement('div');
-  wrap.innerHTML=`<h2 style="font-family:sans-serif;margin-bottom:1rem;">CMS Journey Report — ${new Date().toLocaleDateString()}</h2>`+el.innerHTML+
+  wrap.innerHTML=`<h2 style="font-family:sans-serif;margin-bottom:1rem;">RMS Journey Report — ${new Date().toLocaleDateString()}</h2>`+el.innerHTML+
     `<p style="font-family:sans-serif;margin-top:1rem;">Total: ${document.getElementById('rptAmount').textContent} | Paid: ${document.getElementById('rptPaid').textContent} | Outstanding: ${document.getElementById('rptOutstanding').textContent}</p>`;
   html2pdf().set({margin:10,filename:'rms_report_'+Date.now()+'.pdf',image:{type:'jpeg',quality:.98},html2canvas:{scale:2},jsPDF:{orientation:'landscape',unit:'mm',format:'a4'}}).from(wrap).save();
   alert2('reportAlerts','PDF exported','success');
@@ -1485,8 +1527,43 @@ function printReport(){
   const el=document.getElementById('reportContainer');
   if(!el||el.style.display==='none') return alert2('reportAlerts','Generate report first','error');
   const w=window.open('','','width=1100,height=700');
-  w.document.write('<html><head><title>CMS Report</title><style>body{font-family:Arial;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ddd;padding:8px;text-align:left;}</style></head><body>'+el.innerHTML+'</body></html>');
+  w.document.write('<html><head><title>RMS Report</title><style>body{font-family:Arial;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ddd;padding:8px;text-align:left;}</style></head><body>'+el.innerHTML+'</body></html>');
   w.document.close(); w.print();
+}
+
+/* ── WALLET REPORT (admin only) ── */
+async function generateWalletReport(){
+  if(!currentUser.isAdmin) return;
+  const dateFrom=v('walletReportFromDate'), dateTo=v('walletReportToDate');
+  const filterRiderId=v('walletReportRiderFilter');
+  spin(true);
+  try{
+    const res=await API.getWalletReport(currentUser.isAdmin, currentUser.userId, dateFrom, dateTo, filterRiderId);
+    if(!res.success){ alert2('reportAlerts',res.message||'Could not generate wallet report.','error'); return; }
+    renderWalletReport(res.transactions||[], res.stats||{});
+  }catch(e){ alert2('reportAlerts','Error: '+e.message,'error'); }
+  finally{ spin(false); }
+}
+function renderWalletReport(txns, stats){
+  const c=document.getElementById('walletReportContainer'), s=document.getElementById('walletReportStats');
+  if(!txns.length){ c.style.display='none'; s.style.display='none'; alert2('reportAlerts','No wallet transactions found','info'); return; }
+  document.getElementById('walletReportTableBody').innerHTML=txns.map(t=>{
+    const statusClass = (t.Status==='Success'||t.Status==='Approved') ? 'paid' : (t.Status==='Pending' ? 'pendingconfirmation' : 'balance');
+    return `<tr>
+      <td>${new Date(t.CreatedAt).toLocaleDateString()}</td>
+      <td>${t.RiderId}</td>
+      <td><span class="badge badge-${t.Type==='In'?'paid':'balance'}">${t.Type}</span></td>
+      <td>₹${Number(t.Amount).toFixed(2)}</td>
+      <td>${t.Purpose||'-'}</td>
+      <td><span class="badge badge-${statusClass}">${t.Status||'Success'}</span></td>
+    </tr>`;
+  }).join('');
+  c.style.display='block';
+  document.getElementById('wrptTotal').textContent=stats.totalCount||0;
+  document.getElementById('wrptIn').textContent='₹'+Number(stats.totalIn||0).toFixed(2);
+  document.getElementById('wrptOut').textContent='₹'+Number(stats.totalOut||0).toFixed(2);
+  document.getElementById('wrptNet').textContent='₹'+Number(stats.netAmount||0).toFixed(2);
+  s.style.display='block';
 }
 
 /* ── SETTINGS ── */
