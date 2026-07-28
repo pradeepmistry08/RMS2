@@ -642,7 +642,7 @@ tbody tr:last-child td{border-bottom:none;}
         </div>
         <div id="walletReportContainer" class="card" style="display:none;">
           <div class="card-title"><svg viewBox="0 0 24 24"><path d="M4 19h16M4 19V5h16v14"/></svg>Wallet Transactions</div>
-          <div class="table-wrap"><table><thead><tr><th>Date</th><th>Rider</th><th>Type</th><th>Amount (₹)</th><th>Purpose</th><th>Status</th></tr></thead><tbody id="walletReportTableBody"></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>Date</th><th>Rider</th><th>Type</th><th>Amount (₹)</th><th>Purpose</th><th>Notes</th><th>Status</th></tr></thead><tbody id="walletReportTableBody"></tbody></table></div>
         </div>
         <div id="walletReportStats" style="display:none;">
           <div class="stats-grid">
@@ -1555,6 +1555,7 @@ function renderWalletReport(txns, stats){
       <td><span class="badge badge-${t.Type==='In'?'paid':'balance'}">${t.Type}</span></td>
       <td>₹${Number(t.Amount).toFixed(2)}</td>
       <td>${t.Purpose||'-'}</td>
+      <td>${t.Notes||'-'}</td>
       <td><span class="badge badge-${statusClass}">${t.Status||'Success'}</span></td>
     </tr>`;
   }).join('');
