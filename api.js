@@ -99,6 +99,8 @@ window.API = {
 
   // Reports — rider-specific rows for riders, org-wide for admins.
   // dateFrom/dateTo are plain 'YYYY-MM-DD' strings; statusFilter is 'outstanding' or omitted.
-  getMyReport:      (isAdmin, userId, dateFrom, dateTo, statusFilter) =>
-                       apiCall('getMyReport', { isAdmin, userId, dateFrom, dateTo, statusFilter }, 'GET')
+  getMyReport:      (isAdmin, userId, dateFrom, dateTo, statusFilter, filterRiderId) =>
+                       apiCall('getMyReport', { isAdmin, userId, dateFrom, dateTo, statusFilter, filterRiderId }, 'GET'),
+  getWalletReport:  (isAdmin, userId, dateFrom, dateTo, filterRiderId) =>
+                       apiCall('getWalletReport', { isAdmin, userId, dateFrom, dateTo, filterRiderId }, 'GET')
 };
