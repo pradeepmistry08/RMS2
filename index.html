@@ -3,15 +3,118 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<meta name="description" content="RMS v5.0 - Ride Management System with Journeys & Wallet">
+<meta name="description" content="CMS v4.0 - Carpool Management System">
 <meta name="theme-color" content="#FF9500">
-<title>RMS - Ride Management System</title>
+<title>CMS - Carpool Management System</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="RMS">
+<meta name="apple-mobile-web-app-title" content="CMS">
 
-<script src="api.js"></script>
+<!-- Google Apps Script API layer -->
+<script>
+/* ============================================================
+   API LAYER — the ONLY code in this file that talks to the
+   Google Apps Script backend. Everything else (cms_v4.html's
+   UI logic) calls window.API.* and never touches fetch() or
+   the Apps Script URL directly.
+   ------------------------------------------------------------
+   SETUP: paste your deployed Apps Script Web App URL below
+   (Deploy → New deployment → Web app → Execute as: Me →
+   Who has access: Anyone). It looks like:
+   https://script.google.com/macros/s/XXXXXXXX/exec
+   ============================================================ */
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw0XGZrzPeOrHFZAblh2zU7M9fi7R88CyQ6fjtualmuz0wIZ2kD7d7yjpR5hRymkQLG/exec';
+
+function apiIsConfigured(){
+  return typeof APPS_SCRIPT_URL === 'string' && APPS_SCRIPT_URL.indexOf('https://script.google.com') === 0;
+}
+
+function cleanParams(params){
+  const out = {};
+  Object.keys(params || {}).forEach(k=>{
+    const val = params[k];
+    if(val !== undefined && val !== null && val !== '') out[k] = val;
+  });
+  return out;
+}
+
+/* Every request is retried once on failure before surfacing an
+   error, per the "retry failed requests once" requirement. */
+async function apiCall(action, params, method){
+  const p = cleanParams(params);
+  const doFetch = async () => {
+    if(method === 'POST'){
+      const res = await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids CORS preflight on Apps Script
+        body: JSON.stringify({ action, data: p })
+      });
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      return res.json();
+    }
+    const qs = new URLSearchParams({ action, ...p }).toString();
+    const res = await fetch(`${APPS_SCRIPT_URL}?${qs}`, { method: 'GET' });
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    return res.json();
+  };
+  try{
+    return await doFetch();
+  }catch(err){
+    try{
+      return await doFetch(); // one retry
+    }catch(err2){
+      return { success:false, message: 'Network error: '+err2.message };
+    }
+  }
+}
+
+window.API = {
+  isConfigured: apiIsConfigured,
+
+  login:            (userId, password)          => apiCall('login', { userId, password }, 'POST'),
+  logout:           ()                            => Promise.resolve({ success:true }),
+  changePassword:   (userId, isAdmin, newPassword)=> apiCall('changePassword', { userId, isAdmin, newPassword }, 'POST'),
+
+  getDashboard:     (isAdmin, userId)             => apiCall('dashboard', { isAdmin, userId }, 'GET'),
+
+  getSettings:      ()                            => apiCall('getSettings', {}, 'GET'),
+  updateSettings:   (key, value)                  => apiCall('updateSettings', { key, value }, 'POST'),
+
+  getRiders:        ()                            => apiCall('getRiders', {}, 'GET'),
+  getRider:         (riderId)                     => apiCall('getRider', { riderId }, 'GET'),
+  addRider:         (data)                        => apiCall('addRider', data, 'POST'),
+  updateRider:      (data)                        => apiCall('updateRider', data, 'POST'),
+  deleteRider:      (riderId)                     => apiCall('deleteRider', { riderId }, 'POST'),
+
+  getTrips:         (opts)                        => apiCall('getTrips', opts || {}, 'GET'),
+  getTrip:          (tripId)                      => apiCall('getTrip', { tripId }, 'GET'),
+  addTrip:          (data)                        => apiCall('addTrip', data, 'POST'),
+  updateTrip:       (data)                        => apiCall('updateTrip', data, 'POST'),
+  deleteTrip:       (tripId)                      => apiCall('deleteTrip', { tripId }, 'POST'),
+
+  getPayments:      (opts)                        => apiCall('getPayments', opts || {}, 'GET'),
+  addPayment:       (data)                        => apiCall('addPayment', data, 'POST'),
+  updatePayment:    (data)                        => apiCall('updatePayment', data, 'POST'),
+  deletePayment:    (paymentId)                   => apiCall('deletePayment', { paymentId }, 'POST'),
+
+  /* Reports map onto getTrips' existing filters (month /
+     dateFrom+dateTo / status), so no separate backend action
+     is needed. */
+  generateReport:   (opts)                        => {
+    opts = opts || {};
+    const params = { isAdmin: opts.isAdmin, userId: opts.userId };
+    if(opts.type === 'month')            params.month    = opts.month;
+    else if(opts.type === 'daterange'){  params.dateFrom = opts.dateFrom; params.dateTo = opts.dateTo; }
+    else if(opts.type === 'outstanding') params.status   = 'Balance';
+    // type === 'all' → no extra filter
+    return apiCall('getTrips', params, 'GET');
+  }
+};
+</script>
+
+<!-- Chart.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<!-- html2pdf -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
 <style>
@@ -22,7 +125,6 @@
   --green:#1f9d55; --green-bg:#e9f9ef;
   --red:#d93939;   --red-bg:#fdecec;
   --blue:#2563eb;  --blue-bg:#eaf1ff;
-  --purple:#7c3aed; --purple-bg:#f3ebfe;
   --radius:10px;
 }
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -30,6 +132,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Ar
 ::-webkit-scrollbar{width:7px;height:7px;}
 ::-webkit-scrollbar-thumb{background:#cbd2dc;border-radius:4px;}
 
+/* ── LOGIN ── */
 .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#fff7ed,#fdf2e9);padding:1.2rem;}
 .login-card{background:#fff;border-radius:16px;padding:2.4rem 2rem;box-shadow:0 20px 50px rgba(20,20,40,.12);width:100%;max-width:380px;border:1px solid var(--line);}
 .login-logo{text-align:center;margin-bottom:1.8rem;}
@@ -45,10 +148,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Ar
 .login-btn:hover{filter:brightness(1.05);transform:translateY(-1px);}
 .login-btn svg{width:16px;height:16px;stroke:white;fill:none;stroke-width:2;}
 .login-error{background:var(--red-bg);color:var(--red);padding:.65rem .9rem;border-radius:8px;font-size:.83rem;margin-bottom:1rem;display:none;border-left:3px solid var(--red);}
+
+/* Cloud config banner */
 .cloud-notice{background:#fff7ed;border:1px solid #fcd09a;border-radius:8px;padding:.8rem 1rem;margin-bottom:1.2rem;font-size:.78rem;color:#7c4a00;line-height:1.5;}
 .cloud-notice b{color:var(--orange-dark);}
 .cloud-notice code{background:#ffe8c0;padding:.1rem .3rem;border-radius:4px;font-size:.76rem;}
 
+/* ── TOP BAR ── */
 #mainApp{display:none;min-height:100vh;flex-direction:column;}
 .topbar{background:var(--ink);color:white;display:flex;align-items:center;justify-content:space-between;padding:.65rem 1rem;position:sticky;top:0;z-index:200;box-shadow:0 2px 10px rgba(0,0,0,.12);}
 .topbar-left{display:flex;align-items:center;gap:.7rem;}
@@ -77,6 +183,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Ar
 .logout-btn:hover{border-color:var(--red);color:var(--red);}
 .logout-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;}
 
+/* Mobile Drawer */
 .mobile-nav-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:250;}
 .mobile-nav-overlay.open{display:block;}
 .mobile-nav{position:fixed;top:0;left:0;height:100%;width:240px;background:var(--ink);z-index:260;transform:translateX(-100%);transition:transform .25s ease;padding:1rem 0;overflow-y:auto;}
@@ -86,6 +193,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Ar
 .mobile-nav-close{display:flex;justify-content:flex-end;padding:0 1rem .5rem;}
 .mobile-nav-close svg{width:20px;height:20px;stroke:#94a3b8;fill:none;cursor:pointer;}
 
+/* ── MAIN ── */
 .main-content{flex:1;padding:1.6rem;max-width:1280px;width:100%;margin:0 auto;}
 .content-section{display:none;animation:fadeIn .25s ease;}
 .content-section.active{display:block;}
@@ -121,10 +229,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Ar
 .btn-success:hover{background:#188046;}
 .btn-info{background:var(--blue);color:white;}
 .btn-info:hover{background:#1d4ed8;}
-.btn-purple{background:var(--purple);color:white;}
-.btn-purple:hover{background:#6d28d9;}
 .btn-group{display:flex;gap:.7rem;flex-wrap:wrap;}
-.btn:disabled{opacity:.5;cursor:not-allowed;}
 
 .cat-selector{display:flex;gap:.6rem;margin-bottom:1.4rem;flex-wrap:wrap;}
 .cat-btn{padding:.6rem 1.1rem;border:1.5px solid var(--line);background:white;border-radius:8px;cursor:pointer;font-weight:600;font-size:.85rem;transition:.15s;display:flex;align-items:center;gap:.4rem;}
@@ -142,14 +247,6 @@ tbody tr:last-child td{border-bottom:none;}
 .badge{padding:.28rem .7rem;border-radius:20px;font-weight:700;font-size:.74rem;display:inline-block;}
 .badge-paid{background:var(--green-bg);color:var(--green);}
 .badge-balance{background:var(--red-bg);color:var(--red);}
-.badge-pending{background:var(--red-bg);color:var(--red);}
-.badge-pendingconfirmation{background:#fff7ed;color:var(--orange-dark);}
-.badge-active{background:var(--green-bg);color:var(--green);}
-.badge-inactive{background:#f1f3f7;color:#94a3b8;}
-.badge-draft{background:#f1f3f7;color:#64748b;}
-.badge-started{background:var(--blue-bg);color:var(--blue);}
-.badge-completed{background:var(--green-bg);color:var(--green);}
-.badge-wallet{background:var(--purple-bg);color:var(--purple);}
 
 .action-buttons{display:flex;gap:.4rem;}
 .icon-btn{width:30px;height:30px;border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s;}
@@ -158,8 +255,6 @@ tbody tr:last-child td{border-bottom:none;}
 .icon-btn-edit:hover{background:var(--blue);color:white;}
 .icon-btn-delete{background:var(--red-bg);color:var(--red);}
 .icon-btn-delete:hover{background:var(--red);color:white;}
-.icon-btn-wallet{background:var(--purple-bg);color:var(--purple);}
-.icon-btn-wallet:hover{background:var(--purple);color:white;}
 
 .alert{padding:.85rem 1.1rem;border-radius:8px;margin-bottom:1.1rem;display:flex;align-items:center;gap:.7rem;border-left:4px solid;font-size:.86rem;animation:slideDown .25s ease;}
 @keyframes slideDown{from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:translateY(0);}}
@@ -181,7 +276,6 @@ tbody tr:last-child td{border-bottom:none;}
 .stat-card.c2 .si{background:var(--blue-bg);} .stat-card.c2 .si svg{stroke:var(--blue);}
 .stat-card.c3 .si{background:var(--green-bg);} .stat-card.c3 .si svg{stroke:var(--green);}
 .stat-card.c4 .si{background:var(--red-bg);} .stat-card.c4 .si svg{stroke:var(--red);}
-.stat-card.c5 .si{background:var(--purple-bg);} .stat-card.c5 .si svg{stroke:var(--purple);}
 .stat-label{font-size:.72rem;color:#94a3b8;text-transform:uppercase;font-weight:700;letter-spacing:.4px;margin-bottom:.3rem;}
 .stat-value{font-size:1.6rem;font-weight:800;color:var(--ink);}
 
@@ -192,6 +286,7 @@ tbody tr:last-child td{border-bottom:none;}
 .total-bar .tl{font-weight:700;color:var(--ink);font-size:.9rem;}
 .total-bar .tv{font-size:1.3rem;font-weight:800;color:var(--orange-dark);}
 
+/* Spinner overlay */
 .spinner-overlay{position:fixed;inset:0;background:rgba(255,255,255,.7);display:none;align-items:center;justify-content:center;z-index:999;}
 .spinner-overlay.active{display:flex;}
 .spinner{width:40px;height:40px;border:4px solid var(--line);border-top-color:var(--orange);border-radius:50%;animation:spin .7s linear infinite;}
@@ -199,45 +294,9 @@ tbody tr:last-child td{border-bottom:none;}
 
 .modal{display:none;position:fixed;inset:0;background:rgba(15,20,30,.55);z-index:400;align-items:center;justify-content:center;padding:1rem;}
 .modal.active{display:flex;}
-.modal-content{background:white;border-radius:14px;padding:1.8rem;max-width:520px;width:100%;box-shadow:0 25px 60px rgba(0,0,0,.3);max-height:90vh;overflow-y:auto;}
+.modal-content{background:white;border-radius:14px;padding:1.8rem;max-width:480px;width:100%;box-shadow:0 25px 60px rgba(0,0,0,.3);}
 .modal-header{font-size:1.1rem;font-weight:700;margin-bottom:1.2rem;color:var(--ink);}
 .modal-footer{display:flex;gap:.7rem;justify-content:flex-end;margin-top:1.4rem;}
-
-.rider-only-section{display:none;}
-.rider-only-section.show{display:block;}
-
-/* Journey-specific */
-.rider-select-row{display:flex;align-items:center;gap:.8rem;padding:.85rem;border:1.5px solid var(--line);border-radius:8px;margin-bottom:.6rem;transition:.15s;}
-.rider-select-row.checked{border-color:var(--orange);background:#fff7ed;}
-.rider-select-row input[type=checkbox]{width:18px;height:18px;accent-color:var(--orange);cursor:pointer;flex-shrink:0;}
-.rider-select-info{flex:1;min-width:150px;}
-.rider-select-info .rn{font-weight:700;font-size:.9rem;color:var(--ink);}
-.rider-select-info .rd{font-size:.75rem;color:#94a3b8;margin-top:.15rem;}
-.rider-select-amount{width:110px;}
-.rider-select-amount input{width:100%;padding:.5rem .6rem;border:1.5px solid var(--line);border-radius:6px;font-size:.85rem;}
-.rider-select-wallet{font-size:.75rem;color:var(--purple);font-weight:700;white-space:nowrap;}
-
-.journey-card{border:1.5px solid var(--line);border-radius:10px;padding:1.1rem;margin-bottom:.9rem;transition:.15s;}
-.journey-card:hover{border-color:var(--orange);box-shadow:0 2px 8px rgba(255,149,0,.08);}
-.journey-card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.7rem;flex-wrap:wrap;gap:.5rem;}
-.journey-card-date{font-weight:700;font-size:.95rem;color:var(--ink);}
-.journey-card-meta{font-size:.78rem;color:#94a3b8;margin-top:.2rem;}
-.journey-card-stats{display:flex;gap:1.2rem;margin:.8rem 0;flex-wrap:wrap;}
-.journey-card-stat{font-size:.78rem;color:var(--ink-soft);}
-.journey-card-stat b{color:var(--ink);font-size:.95rem;display:block;}
-
-.qr-payment-card{border:1.5px solid var(--line);border-radius:12px;padding:1.4rem;text-align:center;background:white;margin-bottom:1rem;}
-.qr-payment-card img{border-radius:8px;margin:1rem auto;display:block;}
-.qr-payment-name{font-weight:700;font-size:1.05rem;color:var(--ink);}
-.qr-payment-amount{font-size:1.6rem;font-weight:800;color:var(--orange-dark);margin:.4rem 0;}
-.payment-method-selector{display:flex;gap:.5rem;justify-content:center;margin-top:1rem;flex-wrap:wrap;}
-.pm-btn{padding:.5rem 1rem;border:1.5px solid var(--line);background:white;border-radius:20px;cursor:pointer;font-size:.8rem;font-weight:600;transition:.15s;}
-.pm-btn.active{border-color:var(--orange);background:var(--orange);color:white;}
-
-.wallet-card{background:linear-gradient(135deg,#1a2332,#2d3a52);color:white;border-radius:14px;padding:1.4rem;margin-bottom:1rem;}
-.wallet-card .wl{font-size:.75rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;font-weight:700;}
-.wallet-card .wv{font-size:2rem;font-weight:800;margin:.3rem 0;}
-.wallet-card .wr{font-size:.8rem;color:#cbd5e1;}
 
 #alertContainer{position:fixed;top:70px;right:1rem;z-index:500;max-width:380px;width:calc(100% - 2rem);}
 
@@ -246,7 +305,6 @@ tbody tr:last-child td{border-bottom:none;}
   .main-content{padding:1rem;} .section-title{font-size:1.15rem;} .card{padding:1.1rem;}
   .form-row{grid-template-columns:1fr;} .stats-grid{grid-template-columns:repeat(2,1fr);}
   .btn-group{flex-direction:column;} .btn-group .btn{justify-content:center;width:100%;}
-  .rider-select-row{flex-wrap:wrap;}
 }
 @media print{.topbar,.no-print{display:none;} .main-content{padding:0;background:white;}}
 </style>
@@ -260,14 +318,17 @@ tbody tr:last-child td{border-bottom:none;}
       <div class="login-logo-mark">
         <svg viewBox="0 0 24 24"><path d="M5 17h14M5 17a2 2 0 1 0 4 0M5 17a2 2 0 1 1 4 0m6 0a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0M5 17l1.5-7.5A2 2 0 0 1 8.45 8h7.1a2 2 0 0 1 1.95 1.5L19 17M3 17h2m14 0h2"/></svg>
       </div>
-      <h1>RMS</h1>
-      <p>Ride Management System</p>
+      <h1>CMS</h1>
+      <p>PM Carpool Management System</p>
     </div>
+
     <div id="cloudNotice" class="cloud-notice" style="display:none;">
       <b>Setup Required:</b> The Apps Script backend is not configured.<br>
-      Open <code>api.js</code>, find <code>APPS_SCRIPT_URL</code>, and paste your deployed Web App URL.
+      Open this HTML file, find <code>APPS_SCRIPT_URL</code> near the top, and replace the placeholder with your deployed Google Apps Script Web App URL.
     </div>
+
     <div class="login-error" id="loginError"></div>
+
     <form class="login-form" onsubmit="handleLogin(event)">
       <div class="fg">
         <label>User ID / Rider ID</label>
@@ -289,20 +350,31 @@ tbody tr:last-child td{border-bottom:none;}
 <div id="mainApp">
   <div class="topbar">
     <div class="topbar-left">
-      <button class="menu-btn" onclick="toggleDrawer(true)"><svg viewBox="0 0 24 24"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
+      <button class="menu-btn" onclick="toggleDrawer(true)">
+        <svg viewBox="0 0 24 24"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+      </button>
       <div class="brand">
         <div class="brand-mark"><svg viewBox="0 0 24 24"><path d="M5 17h14M5 17a2 2 0 1 0 4 0M5 17a2 2 0 1 1 4 0m6 0a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0M5 17l1.5-7.5A2 2 0 0 1 8.45 8h7.1a2 2 0 0 1 1.95 1.5L19 17M3 17h2m14 0h2"/></svg></div>
-        <div>RMS <small>Ride Management</small></div>
+        <div>CMS <small>Carpool Management</small></div>
       </div>
     </div>
+
     <div class="nav-row" id="desktopNav"></div>
+
     <div class="topbar-right">
-      <div class="sync-indicator" id="syncIndicator"><div class="sync-dot"></div><span id="syncLabel">Offline</span></div>
+      <div class="sync-indicator" id="syncIndicator">
+        <div class="sync-dot"></div><span id="syncLabel">Offline</span>
+      </div>
       <div class="user-chip">
         <div class="user-avatar" id="userInitial">A</div>
-        <div class="user-meta"><div class="un" id="displayUserName">Admin</div><div class="ur" id="displayUserRole">Administrator</div></div>
+        <div class="user-meta">
+          <div class="un" id="displayUserName">Admin</div>
+          <div class="ur" id="displayUserRole">Administrator</div>
+        </div>
       </div>
-      <button class="logout-btn" onclick="handleLogout()" title="Logout"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button>
+      <button class="logout-btn" onclick="handleLogout()" title="Logout">
+        <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+      </button>
     </div>
   </div>
 
@@ -318,7 +390,7 @@ tbody tr:last-child td{border-bottom:none;}
     <div id="dashboard" class="content-section active">
       <div class="section-header">
         <div class="si"><svg viewBox="0 0 24 24"><path d="M3 3v18h18M7 14l4-4 4 4 5-5"/></svg></div>
-        <div><div class="section-title">Dashboard</div><div class="section-subtitle">Live overview of your ride operations</div></div>
+        <div><div class="section-title">Dashboard</div><div class="section-subtitle">Live overview of your carpool operations</div></div>
       </div>
       <div id="dashboardAlerts"></div>
       <div class="stats-grid">
@@ -326,7 +398,6 @@ tbody tr:last-child td{border-bottom:none;}
         <div class="stat-card c2"><div class="si"><svg viewBox="0 0 24 24"><path d="M5 17h14M5 17a2 2 0 1 0 4 0M5 17a2 2 0 1 1 4 0m6 0a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0M5 17l1.5-7.5A2 2 0 0 1 8.45 8h7.1a2 2 0 0 1 1.95 1.5L19 17"/></svg></div><div class="stat-label">Total Trips</div><div class="stat-value" id="dashTotalTrips">0</div></div>
         <div class="stat-card c3"><div class="si"><svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><div class="stat-label">Total Revenue</div><div class="stat-value" id="dashTotalRevenue">₹0</div></div>
         <div class="stat-card c4"><div class="si"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div><div class="stat-label">Outstanding</div><div class="stat-value" id="dashTotalOutstanding">₹0</div></div>
-        <div class="stat-card c5"><div class="si"><svg viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg></div><div class="stat-label">Total Wallet Balance</div><div class="stat-value" id="dashWalletBalance">₹0</div></div>
       </div>
       <div class="card"><div class="card-title"><svg viewBox="0 0 24 24"><path d="M3 3v18h18M7 14l4-4 4 4 5-5"/></svg>Revenue Trends</div><div class="chart-box"><canvas id="revenueChart"></canvas></div></div>
       <div class="card"><div class="card-title"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10h-10z"/></svg>Payment Method Split</div><div class="chart-box"><canvas id="paymentChart"></canvas></div></div>
@@ -340,7 +411,7 @@ tbody tr:last-child td{border-bottom:none;}
     <div id="rider-master" class="content-section">
       <div class="section-header">
         <div class="si"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-        <div><div class="section-title">Rider Master</div><div class="section-subtitle">Manage rider information, fares, frequency & status</div></div>
+        <div><div class="section-title">Rider Master</div><div class="section-subtitle">Manage rider information and login credentials</div></div>
       </div>
       <div id="riderAlerts"></div>
       <div class="card">
@@ -357,7 +428,7 @@ tbody tr:last-child td{border-bottom:none;}
           </div>
           <div class="form-row">
             <div class="fg"><label>Email</label><input type="email" id="riderEmail" placeholder="rider@example.com"></div>
-            <div class="fg"><label>Phone <span class="req">*</span></label><input type="tel" id="riderPhone" placeholder="+91XXXXXXXXXX"></div>
+            <div class="fg"><label>Phone</label><input type="tel" id="riderPhone" placeholder="+91 XXXXX XXXXX"></div>
           </div>
           <div class="form-row">
             <div class="fg"><label>Password <span class="req">*</span></label><input type="password" id="riderPassword" placeholder="Min 6 characters"></div>
@@ -367,20 +438,9 @@ tbody tr:last-child td{border-bottom:none;}
             <div class="fg"><label>Pick Up Location <span class="req">*</span></label><input type="text" id="pickupLocation" placeholder="e.g. Park Avenue, Mumbai"></div>
             <div class="fg"><label>Drop Location <span class="req">*</span></label><input type="text" id="dropLocation" placeholder="e.g. Office, Mumbai"></div>
           </div>
-          <div class="form-row">
-            <div class="fg"><label>Ride Amount (₹) <span class="req">*</span></label><input type="number" id="riderRideAmount" placeholder="e.g. 100" step="0.01" min="0"></div>
-            <div class="fg"><label>Frequency <span class="req">*</span></label>
-              <select id="riderFrequency"><option value="Both">Both (Morning & Evening)</option><option value="Morning">Morning Only</option><option value="Evening">Evening Only</option></select>
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="fg"><label>Status <span class="req">*</span></label>
-              <select id="riderStatus"><option value="Active">Active</option><option value="Inactive">Inactive</option></select>
-            </div>
-          </div>
           <div class="btn-group">
             <button class="btn btn-primary" onclick="saveNewRider()"><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>Save Rider</button>
-            <button class="btn btn-secondary" onclick="clearRiderForm()">Clear</button>
+            <button class="btn btn-secondary" onclick="clearRiderForm()"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Clear</button>
           </div>
         </div>
 
@@ -403,19 +463,8 @@ tbody tr:last-child td{border-bottom:none;}
               <div class="fg"><label>Pick Up Location</label><input type="text" id="editPickupLocation"></div>
               <div class="fg"><label>Drop Location</label><input type="text" id="editDropLocation"></div>
             </div>
-            <div class="form-row">
-              <div class="fg"><label>Ride Amount (₹)</label><input type="number" id="editRiderRideAmount" step="0.01" min="0"></div>
-              <div class="fg"><label>Frequency</label>
-                <select id="editRiderFrequency"><option value="Both">Both</option><option value="Morning">Morning Only</option><option value="Evening">Evening Only</option></select>
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="fg"><label>Status</label>
-                <select id="editRiderStatus"><option value="Active">Active</option><option value="Inactive">Inactive</option></select>
-              </div>
-            </div>
             <div class="btn-group">
-              <button class="btn btn-primary" onclick="updateRider()">Update Rider</button>
+              <button class="btn btn-primary" onclick="updateRider()"><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>Update Rider</button>
               <button class="btn btn-secondary" onclick="cancelEditRider()">Cancel</button>
             </div>
           </div>
@@ -428,155 +477,56 @@ tbody tr:last-child td{border-bottom:none;}
 
       <div class="card">
         <div class="card-title"><svg viewBox="0 0 24 24"><path d="M4 19h16M4 19V5h16v14"/></svg>All Riders</div>
-        <div class="table-wrap"><table><thead><tr><th>Rider ID</th><th>Name</th><th>Phone</th><th>Pick Up</th><th>Drop</th><th>Freq</th><th>Status</th><th>Amt (₹)</th><th>Wallet</th><th>Actions</th></tr></thead><tbody id="riderTableBody"><tr><td colspan="10" class="empty-state">No riders added yet</td></tr></tbody></table></div>
+        <div class="table-wrap"><table><thead><tr><th>Rider ID</th><th>Name</th><th>Email</th><th>Phone</th><th>Pick Up</th><th>Drop</th><th>Actions</th></tr></thead><tbody id="riderTableBody"><tr><td colspan="7" class="empty-state">No riders added yet</td></tr></tbody></table></div>
       </div>
     </div>
 
-    <!-- JOURNEY MANAGEMENT -->
-    <div id="journey" class="content-section">
+    <!-- TRIP ENTRY -->
+    <div id="trip-entry" class="content-section">
       <div class="section-header">
         <div class="si"><svg viewBox="0 0 24 24"><path d="M5 17h14M5 17a2 2 0 1 0 4 0M5 17a2 2 0 1 1 4 0m6 0a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0M5 17l1.5-7.5A2 2 0 0 1 8.45 8h7.1a2 2 0 0 1 1.95 1.5L19 17"/></svg></div>
-        <div><div class="section-title">Journey Management</div><div class="section-subtitle">Create journeys, select riders & collect payments</div></div>
+        <div><div class="section-title">Trip Entry</div><div class="section-subtitle">Record daily trip transactions</div></div>
       </div>
-      <div id="journeyAlerts"></div>
+      <div id="tripAlerts"></div>
 
-      <div class="cat-selector">
-        <button class="cat-btn active" onclick="setJourneyCat('create',this)"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New Journey</button>
-        <button class="cat-btn" onclick="setJourneyCat('list',this)"><svg viewBox="0 0 24 24"><path d="M4 19h16M4 19V5h16v14"/></svg>All Journeys</button>
-      </div>
-
-      <!-- CREATE JOURNEY -->
-      <div id="journeyCreateSec">
-        <div class="card">
-          <div class="card-title"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Journey Details</div>
-          <div class="form-row">
-            <div class="fg"><label>Journey Date <span class="req">*</span></label><input type="date" id="journeyDate"></div>
-            <div class="fg"><label>Session <span class="req">*</span></label>
-              <select id="journeySession" onchange="loadRidersForJourney()"><option value="">-- Select Session --</option><option value="Morning">Morning</option><option value="Evening">Evening</option></select>
-            </div>
-          </div>
-          <div class="btn-group">
-            <button class="btn btn-info" onclick="loadRidersForJourney()"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>Load Active Riders</button>
-          </div>
-        </div>
-
-        <div class="card" id="journeyRidersCard" style="display:none;">
-          <div class="card-title"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/></svg>Select Riders</div>
-          <p style="color:#94a3b8;font-size:.82rem;margin-bottom:1rem;">Check riders to include. Ride amount is pre-filled from Rider Master and can be edited per journey.</p>
-          <div id="journeyRidersList"></div>
-          <div class="total-bar">
-            <span class="tl">Selected Total</span>
-            <span class="tv">₹<span id="journeySelectedTotal">0.00</span></span>
-          </div>
-          <div class="btn-group" style="margin-top:1rem;">
-            <button class="btn btn-primary" onclick="submitCreateJourney()"><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>Create Journey</button>
+      <div class="card">
+        <div class="card-title"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Trip Details</div>
+        <div class="form-row">
+          <div class="fg"><label>Trip Date <span class="req">*</span></label><input type="date" id="tripDate"></div>
+          <div class="fg"><label>Session <span class="req">*</span></label>
+            <select id="tripSession"><option value="">-- Select Session --</option><option value="Morning">Morning</option><option value="Evening">Evening</option></select>
           </div>
         </div>
       </div>
 
-      <!-- JOURNEY LIST -->
-      <div id="journeyListSec" style="display:none;">
-        <div class="card">
-          <div class="search-bar">
-            <select id="journeyFilterStatus" onchange="loadJourneyList()">
-              <option value="">All Statuses</option><option value="Draft">Draft</option><option value="Started">Started</option><option value="Completed">Completed</option>
-            </select>
-            <input type="date" id="journeyFilterDate" onchange="loadJourneyList()">
+      <div class="card">
+        <div class="card-title"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add Transaction</div>
+        <div class="form-row">
+          <div class="fg"><label>Rider <span class="req">*</span></label><select id="tripRiderName"><option value="">-- Select Rider --</option></select></div>
+          <div class="fg"><label>Ride Amount (₹) <span class="req">*</span></label><input type="number" id="tripRideAmount" placeholder="0.00" step="0.01" min="0"></div>
+        </div>
+        <div class="form-row">
+          <div class="fg"><label>Payment Method <span class="req">*</span></label>
+            <select id="tripPaymentMethod"><option value="">-- Select --</option><option value="UPI">UPI</option><option value="Cash">Cash</option><option value="Wallet">Wallet</option><option value="Bank Transfer">Bank Transfer</option></select>
           </div>
-          <div id="journeyListContainer"><div class="empty-state">No journeys yet</div></div>
+          <div class="fg"><label>Status <span class="req">*</span></label>
+            <select id="tripStatus"><option value="">-- Select --</option><option value="Paid">Paid</option><option value="Balance">Balance</option></select>
+          </div>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="addTripRow()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add Transaction</button>
+          <button class="btn btn-success" onclick="saveAllTrips()"><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>Save All</button>
         </div>
       </div>
 
-      <!-- JOURNEY DETAIL / PAYMENT COLLECTION -->
-      <div id="journeyDetailModal" class="modal">
-        <div class="modal-content" style="max-width:640px;">
-          <div class="modal-header" id="journeyDetailTitle">Journey Details</div>
-          <div id="journeyDetailBody"></div>
-          <div class="modal-footer">
-            <button class="btn btn-secondary" onclick="closeJourneyDetailModal()">Close</button>
-          </div>
+      <div class="card">
+        <div class="card-title"><svg viewBox="0 0 24 24"><path d="M4 19h16M4 19V5h16v14"/></svg>Today's Transactions</div>
+        <div class="search-bar">
+          <input type="date" id="searchTripDate" onchange="filterTrips()">
+          <select id="searchTripSession" onchange="filterTrips()"><option value="">All Sessions</option><option value="Morning">Morning</option><option value="Evening">Evening</option></select>
         </div>
-      </div>
-
-      <!-- QR PAYMENT MODAL -->
-      <div id="qrPaymentModal" class="modal">
-        <div class="modal-content" style="max-width:400px;">
-          <div class="modal-header">Collect Payment</div>
-          <div id="qrPaymentBody"></div>
-          <div class="modal-footer">
-            <button class="btn btn-secondary" onclick="closeQRModal()">Close</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- WALLET MANAGEMENT -->
-    <div id="wallet" class="content-section">
-      <div class="section-header">
-        <div class="si"><svg viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg></div>
-        <div><div class="section-title">Wallet Management</div><div class="section-subtitle">Rider prepaid balances & transaction history</div></div>
-      </div>
-      <div id="walletAlerts"></div>
-
-      <div id="walletAdminView">
-        <div class="card">
-          <div class="card-title"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Pending Top-up Requests</div>
-          <div class="table-wrap"><table><thead><tr><th>Rider</th><th>Amount</th><th>Requested</th><th>Notes</th><th>Actions</th></tr></thead><tbody id="walletRequestsTableBody"><tr><td colspan="5" class="empty-state">No pending requests</td></tr></tbody></table></div>
-        </div>
-
-        <div class="card">
-          <div class="card-title"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add Funds to Rider Wallet</div>
-          <div class="form-row">
-            <div class="fg"><label>Rider <span class="req">*</span></label><select id="walletRiderSelect"><option value="">-- Select Rider --</option></select></div>
-            <div class="fg"><label>Amount (₹) <span class="req">*</span></label><input type="number" id="walletAddAmount" placeholder="0.00" step="0.01" min="0"></div>
-          </div>
-          <div class="form-row">
-            <div class="fg"><label>Purpose</label><input type="text" id="walletAddPurpose" placeholder="e.g. Monthly top-up" value="Top-up"></div>
-            <div class="fg"><label>Notes</label><input type="text" id="walletAddNotes" placeholder="Optional notes"></div>
-          </div>
-          <div class="btn-group">
-            <button class="btn btn-purple" onclick="addFundsToWallet()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add Funds</button>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-title"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/></svg>All Rider Wallets</div>
-          <div class="table-wrap"><table><thead><tr><th>Rider</th><th>Balance</th><th>Total Top-ups</th><th>Last Transaction</th><th>Actions</th></tr></thead><tbody id="walletTableBody"><tr><td colspan="5" class="empty-state">No wallets yet</td></tr></tbody></table></div>
-        </div>
-      </div>
-
-      <div id="walletRiderView" style="display:none;">
-        <div class="wallet-card">
-          <div class="wl">Your Wallet Balance</div>
-          <div class="wv" id="myWalletBalance">₹0.00</div>
-          <div class="wr">Use this balance to pay for journeys instantly</div>
-        </div>
-
-        <div class="card">
-          <div class="card-title"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add Funds to Wallet</div>
-          <p style="color:#94a3b8;font-size:.82rem;margin-bottom:1rem;">Pay via UPI, then send for admin approval — funds are added to your wallet once approved.</p>
-          <div class="form-row">
-            <div class="fg"><label>Amount (₹) <span class="req">*</span></label><input type="number" id="myTopupAmount" placeholder="0.00" step="0.01" min="0"></div>
-            <div class="fg"><label>Notes</label><input type="text" id="myTopupNotes" placeholder="e.g. Paid via UPI on 26 Jul"></div>
-          </div>
-          <div class="btn-group">
-            <button class="btn btn-purple" onclick="startTopupPayment()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>+ Add Funds</button>
-            <button class="btn btn-info" id="topupSendApprovalBtn" onclick="submitTopupRequest()" disabled>I've Paid — Send for Approval</button>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-title"><svg viewBox="0 0 24 24"><path d="M4 19h16M4 19V5h16v14"/></svg>Transaction History</div>
-          <div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Purpose</th><th>Status</th></tr></thead><tbody id="myWalletTxnBody"><tr><td colspan="5" class="empty-state">No transactions yet</td></tr></tbody></table></div>
-        </div>
-      </div>
-
-      <div class="modal" id="walletHistoryModal">
-        <div class="modal-content">
-          <div class="modal-header" id="walletHistoryTitle">Wallet History</div>
-          <div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Purpose</th></tr></thead><tbody id="walletHistoryBody"></tbody></table></div>
-          <div class="modal-footer"><button class="btn btn-secondary" onclick="closeWalletHistoryModal()">Close</button></div>
-        </div>
+        <div class="table-wrap"><table><thead><tr><th>#</th><th>Rider</th><th>Amount (₹)</th><th>Payment</th><th>Status</th><th>Actions</th></tr></thead><tbody id="tripTableBody"><tr><td colspan="6" class="empty-state">Select date to view transactions</td></tr></tbody></table></div>
+        <div class="total-bar"><span class="tl">Total Amount</span><span class="tv">₹<span id="tripTotalAmount">0.00</span></span></div>
       </div>
     </div>
 
@@ -584,84 +534,35 @@ tbody tr:last-child td{border-bottom:none;}
     <div id="reports" class="content-section">
       <div class="section-header">
         <div class="si"><svg viewBox="0 0 24 24"><path d="M4 19h16M4 19V5h16v14M8 13v3M12 9v7M16 11v5"/></svg></div>
-        <div><div class="section-title">My Reports</div><div class="section-subtitle">View and analyze journey transactions</div></div>
+        <div><div class="section-title">My Reports</div><div class="section-subtitle">View and analyze trip transactions</div></div>
       </div>
       <div id="reportAlerts"></div>
-
-      <div class="cat-selector" id="reportCatSelector" style="display:none;">
-        <button class="cat-btn active" onclick="setReportCat('journey',this)"><svg viewBox="0 0 24 24"><path d="M5 17h14M5 17a2 2 0 1 0 4 0M5 17a2 2 0 1 1 4 0m6 0a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0M5 17l1.5-7.5A2 2 0 0 1 8.45 8h7.1a2 2 0 0 1 1.95 1.5L19 17"/></svg>Journey Report</button>
-        <button class="cat-btn" onclick="setReportCat('wallet',this)"><svg viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg>Wallet Report</button>
-      </div>
-
-      <div id="journeyReportSec">
-        <div class="card">
-          <div class="card-title"><svg viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>Report Filters</div>
-          <div class="form-row">
-            <div class="fg" id="reportRiderFG" style="display:none;"><label>Rider</label>
-              <select id="reportRiderFilter" onchange="generateReport()"><option value="">All Riders</option></select>
-            </div>
-            <div class="fg"><label>Status</label>
-              <select id="reportSearchType" onchange="generateReport()"><option value="all">All</option><option value="outstanding">Outstanding Only</option></select>
-            </div>
-            <div class="fg"><label>From Date</label><input type="date" id="reportFromDate" onchange="generateReport()"></div>
-            <div class="fg"><label>To Date</label><input type="date" id="reportToDate" onchange="generateReport()"></div>
+      <div class="card">
+        <div class="card-title"><svg viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>Report Filters</div>
+        <div class="form-row">
+          <div class="fg"><label>Search By</label>
+            <select id="reportSearchType" onchange="updateReportFilters()"><option value="month">By Month</option><option value="all">All Transactions</option><option value="outstanding">Outstanding Only</option><option value="daterange">Date Range</option></select>
           </div>
-          <div class="btn-group">
-            <button class="btn btn-primary" onclick="generateReport()">Generate Report</button>
-            <button class="btn btn-success" onclick="exportReportPDF()">Export PDF</button>
-            <button class="btn btn-info" onclick="printReport()">Print</button>
-          </div>
+          <div class="fg" id="monthFG"><label>Month</label><input type="month" id="reportMonth" onchange="generateReport()"></div>
+          <div class="fg" id="fromFG" style="display:none;"><label>From Date</label><input type="date" id="reportFromDate" onchange="generateReport()"></div>
+          <div class="fg" id="toFG" style="display:none;"><label>To Date</label><input type="date" id="reportToDate" onchange="generateReport()"></div>
         </div>
-        <div id="reportContainer" class="card" style="display:none;">
-          <div class="card-title"><svg viewBox="0 0 24 24"><path d="M4 19h16M4 19V5h16v14"/></svg>Journey Details</div>
-          <div class="table-wrap"><table><thead><tr><th>Date</th><th>Session</th><th>Rider</th><th>Amount (₹)</th><th>Status</th><th>Method</th><th>Action</th></tr></thead><tbody id="reportTableBody"></tbody></table></div>
-        </div>
-        <div id="reportStats" style="display:none;">
-          <div class="stats-grid">
-            <div class="stat-card c2"><div class="stat-label">Total Journeys</div><div class="stat-value" id="rptTotal">0</div></div>
-            <div class="stat-card c1"><div class="stat-label">Total Amount</div><div class="stat-value" id="rptAmount">₹0</div></div>
-            <div class="stat-card c3"><div class="stat-label">Total Paid</div><div class="stat-value" id="rptPaid">₹0</div></div>
-            <div class="stat-card c4"><div class="stat-label">Outstanding</div><div class="stat-value" id="rptOutstanding">₹0</div></div>
-          </div>
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="generateReport()"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>Generate Report</button>
+          <button class="btn btn-success" onclick="exportReportPDF()"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Export PDF</button>
+          <button class="btn btn-info" onclick="printReport()"><svg viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>Print</button>
         </div>
       </div>
-
-      <div id="walletReportSec" style="display:none;">
-        <div class="card">
-          <div class="card-title"><svg viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>Wallet Report Filters</div>
-          <div class="form-row">
-            <div class="fg" id="walletReportRiderFG" style="display:none;"><label>Rider</label>
-              <select id="walletReportRiderFilter" onchange="generateWalletReport()"><option value="">All Riders</option></select>
-            </div>
-            <div class="fg"><label>From Date</label><input type="date" id="walletReportFromDate" onchange="generateWalletReport()"></div>
-            <div class="fg"><label>To Date</label><input type="date" id="walletReportToDate" onchange="generateWalletReport()"></div>
-          </div>
-          <div class="btn-group">
-            <button class="btn btn-primary" onclick="generateWalletReport()">Generate Report</button>
-          </div>
-        </div>
-        <div id="walletReportContainer" class="card" style="display:none;">
-          <div class="card-title"><svg viewBox="0 0 24 24"><path d="M4 19h16M4 19V5h16v14"/></svg>Wallet Transactions</div>
-          <div class="table-wrap"><table><thead><tr><th>Date</th><th>Rider</th><th>Type</th><th>Amount (₹)</th><th>Purpose</th><th>Notes</th><th>Status</th></tr></thead><tbody id="walletReportTableBody"></tbody></table></div>
-        </div>
-        <div id="walletReportStats" style="display:none;">
-          <div class="stats-grid">
-            <div class="stat-card c2"><div class="stat-label">Total Transactions</div><div class="stat-value" id="wrptTotal">0</div></div>
-            <div class="stat-card c3"><div class="stat-label">Total In</div><div class="stat-value" id="wrptIn">₹0</div></div>
-            <div class="stat-card c4"><div class="stat-label">Total Out</div><div class="stat-value" id="wrptOut">₹0</div></div>
-            <div class="stat-card c1"><div class="stat-label">Net</div><div class="stat-value" id="wrptNet">₹0</div></div>
-          </div>
-        </div>
+      <div id="reportContainer" class="card" style="display:none;">
+        <div class="card-title"><svg viewBox="0 0 24 24"><path d="M4 19h16M4 19V5h16v14"/></svg>Transaction Details</div>
+        <div class="table-wrap"><table><thead><tr><th>Date</th><th>Session</th><th>Rider</th><th>Amount (₹)</th><th>Payment</th><th>Status</th></tr></thead><tbody id="reportTableBody"></tbody></table></div>
       </div>
-
-      <!-- RIDER PAYMENT MODAL -->
-      <div id="riderPayModal" class="modal">
-        <div class="modal-content" style="max-width:400px;">
-          <div class="modal-header">Pay Outstanding Amount</div>
-          <div id="riderPayBody"></div>
-          <div class="modal-footer">
-            <button class="btn btn-secondary" onclick="closeRiderPayModal()">Close</button>
-          </div>
+      <div id="reportStats" style="display:none;">
+        <div class="stats-grid">
+          <div class="stat-card c2"><div class="stat-label">Total Transactions</div><div class="stat-value" id="rptTotal">0</div></div>
+          <div class="stat-card c1"><div class="stat-label">Total Amount</div><div class="stat-value" id="rptAmount">₹0</div></div>
+          <div class="stat-card c3"><div class="stat-label">Total Paid</div><div class="stat-value" id="rptPaid">₹0</div></div>
+          <div class="stat-card c4"><div class="stat-label">Outstanding</div><div class="stat-value" id="rptOutstanding">₹0</div></div>
         </div>
       </div>
     </div>
@@ -673,55 +574,34 @@ tbody tr:last-child td{border-bottom:none;}
         <div><div class="section-title">Settings</div><div class="section-subtitle">Account and data preferences</div></div>
       </div>
       <div id="settingsAlerts"></div>
-
-      <div id="adminDataSection" style="display:none;">
-        <div class="card">
-          <div class="card-title"><svg viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg>UPI Payment Settings (Admin Only)</div>
-          <p style="margin-bottom:1rem;color:#64748b;font-size:.85rem;">Riders paying via "Pay Now" or wallet top-up will be directed to this UPI ID.</p>
-          <div class="form-row">
-            <div class="fg"><label>Your UPI ID <span class="req">*</span></label><input type="text" id="settingsUpiId" placeholder="e.g. yourname@okhdfcbank"></div>
-            <div class="fg"><label>Payee Display Name</label><input type="text" id="settingsUpiPayeeName" placeholder="e.g. RMS Admin"></div>
-          </div>
-          <div class="btn-group">
-            <button class="btn btn-primary" onclick="saveUpiSettings()">Save UPI Settings</button>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-title"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Data Management (Admin Only)</div>
-          <p style="margin-bottom:1rem;color:#64748b;font-size:.85rem;">Export a JSON backup or restore from a previous backup file.</p>
-          <div class="btn-group">
-            <button class="btn btn-success" onclick="exportData()">Export All Data</button>
-            <button class="btn btn-danger" onclick="resetApplication()">Reset All Data</button>
-          </div>
-        </div>
-      </div>
-
       <div class="card">
-        <div class="card-title"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Account Security</div>
+        <div class="card-title"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Account</div>
         <div class="form-row">
           <div class="fg"><label>User ID</label><input type="text" id="settingsUserId" readonly></div>
           <div class="fg"><label>Role</label><input type="text" id="settingsUserRole" readonly></div>
         </div>
-        <div style="margin-bottom:1.1rem; padding:0.8rem; background:#eef1f5; border-radius:8px; border-left:3px solid var(--blue);">
-          <p style="font-size:.85rem; color:#64748b; margin:0;"><strong>Change Your Password</strong></p>
-        </div>
         <div class="form-row">
-          <div class="fg"><label>Current Password <span class="req">*</span></label><input type="password" id="settingsCurrentPassword" placeholder="Current password"></div>
-          <div class="fg"><label>New Password <span class="req">*</span></label><input type="password" id="settingsNewPassword" placeholder="New password (min 6 chars)"></div>
+          <div class="fg"><label>New Password</label><input type="password" id="settingsNewPassword" placeholder="Leave blank to keep current"></div>
+          <div class="fg"><label>Confirm Password</label><input type="password" id="settingsConfirmPassword"></div>
         </div>
-        <div class="form-row">
-          <div class="fg"><label>Confirm New Password <span class="req">*</span></label><input type="password" id="settingsConfirmPassword" placeholder="Confirm new password"></div>
-        </div>
-        <div class="btn-group"><button class="btn btn-primary" onclick="updatePasswordWithCurrent()">Update Password</button></div>
+        <div class="btn-group"><button class="btn btn-primary" onclick="updatePassword()">Update Password</button></div>
       </div>
-
+      <div class="card">
+        <div class="card-title"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Data Management</div>
+        <p style="margin-bottom:1rem;color:#64748b;font-size:.85rem;">Export a JSON backup or restore from a previous backup file.</p>
+        <div class="btn-group">
+          <button class="btn btn-success" onclick="exportData()">Export All Data</button>
+          <button class="btn btn-info" onclick="importDataDialog()">Import Data</button>
+          <button class="btn btn-danger" onclick="resetApplication()">Reset All Data</button>
+        </div>
+      </div>
       <div class="card">
         <div class="card-title"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>About</div>
         <table style="width:100%;font-size:.85rem;">
-          <tr style="border-bottom:1px solid #f1f3f7;"><td style="padding:.5rem;color:#64748b;">App</td><td style="padding:.5rem;font-weight:600;">Ride Management System (RMS)</td></tr>
-          <tr style="border-bottom:1px solid #f1f3f7;"><td style="padding:.5rem;color:#64748b;">Version</td><td style="padding:.5rem;font-weight:600;">5.0 — Journey & Wallet Edition</td></tr>
-          <tr><td style="padding:.5rem;color:#64748b;">Platform</td><td style="padding:.5rem;font-weight:600;">Google Sheets via Apps Script</td></tr>
+          <tr style="border-bottom:1px solid #f1f3f7;"><td style="padding:.5rem;color:#64748b;">App</td><td style="padding:.5rem;font-weight:600;">Carpool Management System (CMS)</td></tr>
+          <tr style="border-bottom:1px solid #f1f3f7;"><td style="padding:.5rem;color:#64748b;">Version</td><td style="padding:.5rem;font-weight:600;">4.0 — Cloud Sync Edition</td></tr>
+          <tr style="border-bottom:1px solid #f1f3f7;"><td style="padding:.5rem;color:#64748b;">Platform</td><td style="padding:.5rem;font-weight:600;">Google Sheets via Apps Script</td></tr>
+          <tr><td style="padding:.5rem;color:#64748b;">Storage</td><td style="padding:.5rem;font-weight:600;">Cloud (real-time sync across devices)</td></tr>
         </table>
       </div>
     </div>
@@ -732,29 +612,58 @@ tbody tr:last-child td{border-bottom:none;}
 <div id="alertContainer"></div>
 <div class="spinner-overlay" id="spinner"><div class="spinner"></div></div>
 
+<div id="importModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">Import Data</div>
+    <p style="color:#64748b;font-size:.85rem;margin-bottom:1rem;">Select a JSON backup file. This will overwrite existing data.</p>
+    <input type="file" id="importFile" accept=".json" style="width:100%;padding:.7rem;border:1.5px solid var(--line);border-radius:8px;">
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="performImport()">Import</button>
+      <button class="btn btn-secondary" onclick="closeImportModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ============================================================
-   RMS v5.0 — Journey & Wallet Edition
+   CMS v4.0 — Google Sheets Edition
+   ─────────────────────────────────────────────────────────
+   This file is purely a presentation layer. Every read and
+   write goes through the methods on `window.API` defined in
+   api.js, which is the only file that talks to the Google
+   Apps Script backend. The connected Google Spreadsheet is
+   the single source of truth — there is no local database,
+   no local database, and no cached copies of ride
+   data kept between screens.
+
+   Session persistence: only the logged-in user's identity is
+   kept in localStorage (so a refresh doesn't force a re-login).
+   All actual data is always fetched fresh from the backend.
    ============================================================ */
 
-let currentUser = null;
-let currentModule = 'dashboard';
-let revenueChart = null, paymentChart = null;
-let dashboardIntervalId = null;
-let journeyRidersCache = []; // riders loaded for the "create journey" screen
-let currentJourneyForPayment = null;
+/* ── State ─────────────────────────────────────────────── */
+let currentUser    = null;
+let currentModule  = 'dashboard';
+let pendingTrips   = [];   // rows staged in the UI but not yet saved to the sheet
+let displayedTrips = [];   // rows currently shown in the trip table (saved rows for the active date/session)
+let revenueChart   = null, paymentChart = null;
+let isSavingTrips  = false; // guards against duplicate "Save All" submissions
+let editingTripId  = null;  // dbId of a saved trip currently being edited (uses API.updateTrip, no delete+recreate)
+let dashboardIntervalId = null; // auto-refresh timer, active while logged in
 
-/* ── NAVIGATION ── */
+/* ══════════════════════════════════════════════════════════
+   NAVIGATION
+   ══════════════════════════════════════════════════════════ */
 const NAV = [
   {id:'dashboard',   label:'Dashboard',    admin:false, d:'<path d="M3 3v18h18M7 14l4-4 4 4 5-5"/>'},
   {id:'rider-master',label:'Rider Master', admin:true,  d:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>'},
-  {id:'journey',     label:'Journey',      admin:true,  d:'<path d="M5 17h14M5 17a2 2 0 1 0 4 0M5 17a2 2 0 1 1 4 0m6 0a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0M5 17l1.5-7.5A2 2 0 0 1 8.45 8h7.1a2 2 0 0 1 1.95 1.5L19 17"/>'},
-  {id:'wallet',      label:'Wallet',       admin:false, d:'<rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/>'},
+  {id:'trip-entry',  label:'Trip Entry',   admin:true,  d:'<path d="M5 17h14M5 17a2 2 0 1 0 4 0M5 17a2 2 0 1 1 4 0m6 0a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0M5 17l1.5-7.5A2 2 0 0 1 8.45 8h7.1a2 2 0 0 1 1.95 1.5L19 17"/>'},
   {id:'reports',     label:'My Reports',   admin:false, d:'<path d="M4 19h16M4 19V5h16v14M8 13v3M12 9v7M16 11v5"/>'},
-  {id:'settings',    label:'Settings',     admin:false, d:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82"/>'}
+  {id:'settings',    label:'Settings',     admin:true,  d:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>'}
 ];
 function navItem(n,mobile){
-  return `<div class="nav-item" data-mod="${n.id}" onclick="switchModule('${n.id}')${mobile?';toggleDrawer(false)':''}">
+  const i = mobile ? 'nav-item' : 'nav-item';
+  return `<div class="${i}" data-mod="${n.id}" onclick="switchModule('${n.id}')${mobile?';toggleDrawer(false)':''}">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">${n.d}</svg>${n.label}</div>`;
 }
 function buildNav(){
@@ -772,30 +681,36 @@ function switchModule(mod){
   document.querySelectorAll(`.nav-item[data-mod="${mod}"]`).forEach(n=>n.classList.add('active'));
   if(mod==='dashboard')    loadDashboard();
   else if(mod==='rider-master') loadRiderMaster();
-  else if(mod==='journey')      loadJourneyModule();
-  else if(mod==='wallet')       loadWalletModule();
+  else if(mod==='trip-entry')   loadTripEntry();
   else if(mod==='reports')      initReportFilters();
-  else if(mod==='settings')     initSettings();
 }
 function toggleDrawer(on){
   document.getElementById('drawerNav').classList.toggle('open',on);
   document.getElementById('drawerOverlay').classList.toggle('open',on);
 }
 
-/* ── AUTH ── */
+/* ══════════════════════════════════════════════════════════
+   AUTH
+   ══════════════════════════════════════════════════════════ */
 async function handleLogin(e){
   e.preventDefault();
-  const id=document.getElementById('loginId').value.trim();
-  const pwd=document.getElementById('loginPassword').value;
-  showErr(''); spin(true);
+  const id  = document.getElementById('loginId').value.trim();
+  const pwd = document.getElementById('loginPassword').value;
+  showErr('');
+  spin(true);
   try{
-    const res=await API.login(id,pwd);
-    if(!res.success){ showErr(res.message||'Login failed.'); return; }
-    const u=res.user;
-    currentUser={userId:u.userId,name:u.name,role:u.role,isAdmin:!!u.isAdmin};
-    localStorage.setItem('rmsUser',JSON.stringify(currentUser));
+    const res = await API.login(id, pwd);
+    if(!res.success){ showErr(res.message || 'Login failed.'); return; }
+    const u = res.user;
+    currentUser = {
+      userId: u.userId,
+      name: u.name,
+      role: u.role,
+      isAdmin: !!u.isAdmin
+    };
+    localStorage.setItem('rmsUser', JSON.stringify(currentUser));
     enterApp();
-    alert2('dashboardAlerts',`Welcome, ${currentUser.name}`,'success');
+    alert2('dashboardAlerts',`Welcome, ${currentUser.name}`, 'success');
   }catch(err){ showErr('Login error: '+err.message); }
   finally{ spin(false); }
 }
@@ -803,20 +718,29 @@ function showErr(msg){ const b=document.getElementById('loginError'); b.textCont
 function enterApp(){
   document.getElementById('loginPage').style.display='none';
   document.getElementById('mainApp').style.display='flex';
-  updateUserDisplay(); buildNav(); switchModule('dashboard'); startDashboardAutoRefresh();
+  updateUserDisplay();
+  buildNav();
+  switchModule('dashboard');
+  startDashboardAutoRefresh();
 }
 function startDashboardAutoRefresh(){
   stopDashboardAutoRefresh();
-  dashboardIntervalId=setInterval(()=>{ if(currentUser&&currentModule==='dashboard') loadDashboard(); },30000);
+  dashboardIntervalId = setInterval(()=>{
+    if(currentUser && currentModule==='dashboard') loadDashboard();
+  }, 30000);
 }
-function stopDashboardAutoRefresh(){ if(dashboardIntervalId){clearInterval(dashboardIntervalId);dashboardIntervalId=null;} }
+function stopDashboardAutoRefresh(){
+  if(dashboardIntervalId){ clearInterval(dashboardIntervalId); dashboardIntervalId=null; }
+}
 async function handleLogout(){
   if(confirm('Logout?')){
-    await API.logout(); stopDashboardAutoRefresh();
+    await API.logout();
+    stopDashboardAutoRefresh();
     currentUser=null; localStorage.removeItem('rmsUser');
     document.getElementById('mainApp').style.display='none';
     document.getElementById('loginPage').style.display='flex';
-    document.getElementById('loginId').value=''; document.getElementById('loginPassword').value='';
+    document.getElementById('loginId').value='';
+    document.getElementById('loginPassword').value='';
   }
 }
 function updateUserDisplay(){
@@ -827,119 +751,133 @@ function updateUserDisplay(){
   document.getElementById('settingsUserRole').value=currentUser.role;
 }
 
-/* ── ALERTS / SPINNER ── */
+/* ══════════════════════════════════════════════════════════
+   ALERTS / SPINNER UTILS
+   ══════════════════════════════════════════════════════════ */
 const AICONS={success:'<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/>',error:'<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>',info:'<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>'};
-function alert2(cid,msg,type='success'){
-  const c=document.getElementById(cid)||document.getElementById('alertContainer');
+function alert2(cid, msg, type='success'){
+  const c = document.getElementById(cid)||document.getElementById('alertContainer');
   const id='al'+Date.now();
   c.insertAdjacentHTML('beforeend',`<div class="alert alert-${type}" id="${id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${AICONS[type]}</svg><span>${msg}</span><span class="alert-close" onclick="document.getElementById('${id}')?.remove()">&times;</span></div>`);
   setTimeout(()=>document.getElementById(id)?.remove(),5000);
 }
 function spin(on){ document.getElementById('spinner').classList.toggle('active',on); }
-function v(id){ const el=document.getElementById(id); return el?el.value.trim():''; }
 
-async function refreshAll(){ await loadDashboard(); if(currentModule==='reports') await generateReport(); }
+/* ══════════════════════════════════════════════════════════
+   CENTRAL REFRESH — keeps dashboard & reports in sync
+   ══════════════════════════════════════════════════════════ */
+async function refreshAll(){
+  await loadDashboard();
+  if(currentModule==='reports') await generateReport();
+}
 
-/* ── DASHBOARD ── */
+/* ══════════════════════════════════════════════════════════
+   DASHBOARD  (values come entirely from the backend; no
+   client-side aggregation of locally stored arrays)
+   ══════════════════════════════════════════════════════════ */
 async function loadDashboard(){
   try{
-    const res=await API.getDashboard(currentUser.isAdmin,currentUser.userId);
-    if(!res.success){ alert2('dashboardAlerts',res.message||'Could not load dashboard.','error'); return; }
-    const d=res.data;
-    document.getElementById('dashTotalRiders').textContent=d.totalRiders;
-    document.getElementById('dashTotalTrips').textContent=d.totalTrips;
-    document.getElementById('dashTotalRevenue').textContent='₹'+Number(d.totalRevenue).toFixed(2);
-    document.getElementById('dashTotalOutstanding').textContent='₹'+Number(d.outstanding).toFixed(2);
-    document.getElementById('dashWalletBalance').textContent='₹'+Number(d.totalWalletBalance||0).toFixed(2);
-    const recent=d.recentTransactions||[];
-    document.getElementById('dashRecentTrips').innerHTML=recent.length
+    const res = await API.getDashboard(currentUser.isAdmin, currentUser.userId);
+    if(!res.success){ alert2('dashboardAlerts', res.message || 'Could not load dashboard.', 'error'); return; }
+    const d = res.data;
+
+    document.getElementById('dashTotalRiders').textContent = d.totalRiders;
+    document.getElementById('dashTotalTrips').textContent  = d.totalTrips;
+    document.getElementById('dashTotalRevenue').textContent   = '₹'+Number(d.totalRevenue).toFixed(2);
+    document.getElementById('dashTotalOutstanding').textContent = '₹'+Number(d.outstanding).toFixed(2);
+
+    const recent = d.recentTransactions || [];
+    document.getElementById('dashRecentTrips').innerHTML = recent.length
       ? recent.map(t=>`<tr><td>${t.tripDate}</td><td>${t.riderName}</td><td>₹${Number(t.rideAmount).toFixed(2)}</td><td>${t.paymentMethod}</td><td><span class="badge badge-${t.status.toLowerCase()}">${t.status}</span></td></tr>`).join('')
       : '<tr><td colspan="5" class="empty-state">No transactions yet</td></tr>';
-    buildCharts(d.dailyRevenue||{dates:[],values:[]}, d.paymentSplit||{labels:[],values:[]});
-  }catch(e){ console.error(e); alert2('dashboardAlerts','Error loading dashboard: '+e.message,'error'); }
+
+    buildCharts(d.dailyRevenue || {dates:[],values:[]}, d.paymentSplit || {labels:[],values:[]});
+  }catch(e){ console.error(e); alert2('dashboardAlerts', 'Error loading dashboard: '+e.message, 'error'); }
 }
-function buildCharts(dailyRevenue,paymentSplit){
-  const dates=dailyRevenue.dates||[], values=dailyRevenue.values||[];
+
+function buildCharts(dailyRevenue, paymentSplit){
+  const dates = dailyRevenue.dates || [];
+  const values = dailyRevenue.values || [];
+
   const rCtx=document.getElementById('revenueChart').getContext('2d');
   if(revenueChart) revenueChart.destroy();
   revenueChart=new Chart(rCtx,{type:'line',data:{labels:dates,datasets:[{label:'Daily Revenue',data:values,borderColor:'#FF9500',backgroundColor:'rgba(255,149,0,.1)',borderWidth:2,tension:.35,fill:true,pointRadius:4,pointBackgroundColor:'#FF9500'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:dates.length>0}},scales:{y:{beginAtZero:true}}}});
-  const pLabels=paymentSplit.labels||[], pValues=paymentSplit.values||[];
+
+  const pLabels = paymentSplit.labels || [];
+  const pValues = paymentSplit.values || [];
   const pCtx=document.getElementById('paymentChart').getContext('2d');
   if(paymentChart) paymentChart.destroy();
-  paymentChart=new Chart(pCtx,{type:'doughnut',data:{labels:pLabels,datasets:[{data:pValues,backgroundColor:['#FF9500','#2563eb','#1f9d55','#d93939','#7c3aed'],borderColor:'#fff',borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
+  paymentChart=new Chart(pCtx,{type:'doughnut',data:{labels:pLabels,datasets:[{data:pValues,backgroundColor:['#FF9500','#2563eb','#1f9d55','#d93939'],borderColor:'#fff',borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
 }
 
-/* ── RIDER MASTER ── */
-function setRiderCat(cat,btn){
-  document.querySelectorAll('#rider-master .cat-btn').forEach(b=>b.classList.remove('active'));
+/* ══════════════════════════════════════════════════════════
+   RIDER MASTER
+   ══════════════════════════════════════════════════════════ */
+function setRiderCat(cat, btn){
+  document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
-  document.getElementById('secNew').style.display=cat==='new'?'block':'none';
-  document.getElementById('secEdit').style.display=cat==='edit'?'block':'none';
-  document.getElementById('secView').style.display=cat==='view'?'block':'none';
+  document.getElementById('secNew').style.display  = cat==='new'  ? 'block':'none';
+  document.getElementById('secEdit').style.display = cat==='edit' ? 'block':'none';
+  document.getElementById('secView').style.display = cat==='view' ? 'block':'none';
   if(cat==='edit') populateEditDropdown();
   loadRidersForTable();
 }
-async function loadRiderMaster(){ loadRidersForTable(); }
+async function loadRiderMaster(){
+  loadRidersForTable();
+}
 async function loadRidersForTable(){
-  const res=await API.getRiders();
-  if(!res.success){ alert2('riderAlerts',res.message||'Could not load riders.','error'); return; }
-  const riders=res.riders||[];
-  document.getElementById('riderTableBody').innerHTML=riders.length
+  const res = await API.getRiders();
+  if(!res.success){ alert2('riderAlerts', res.message || 'Could not load riders.', 'error'); return; }
+  const riders = res.riders || [];
+  document.getElementById('riderTableBody').innerHTML = riders.length
     ? riders.map(r=>`<tr>
-        <td><strong>${r.RiderId}</strong></td><td>${r.Name}</td><td>${r.Phone||'-'}</td>
-        <td>${r.PickupLocation}</td><td>${r.DropLocation}</td>
-        <td>${r.Frequency}</td>
-        <td><span class="badge badge-${String(r.Status).toLowerCase()}">${r.Status}</span></td>
-        <td>₹${Number(r.RideAmount||0).toFixed(2)}</td>
-        <td>₹${Number(r.WalletBalance||0).toFixed(2)}</td>
+        <td><strong>${r.riderId}</strong></td><td>${r.name}</td><td>${r.email||'-'}</td><td>${r.phone||'-'}</td>
+        <td>${r.pickupLocation}</td><td>${r.dropLocation}</td>
         <td><div class="action-buttons">
-          <button class="icon-btn icon-btn-edit" onclick="editRider('${r.RiderId}')" title="Edit"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-          <button class="icon-btn icon-btn-delete" onclick="deleteRider('${r.RiderId}')" title="Delete"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z"/></svg></button>
+          <button class="icon-btn icon-btn-edit" onclick="editRider('${r.riderId}')" title="Edit"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+          <button class="icon-btn icon-btn-delete" onclick="deleteRider('${r.riderId}')" title="Delete"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z"/></svg></button>
         </div></td>
       </tr>`).join('')
-    : '<tr><td colspan="10" class="empty-state">No riders added yet</td></tr>';
+    : '<tr><td colspan="7" class="empty-state">No riders added yet</td></tr>';
 }
 async function populateEditDropdown(){
-  const res=await API.getRiders();
-  const riders=res.success?(res.riders||[]):[];
-  const sel=document.getElementById('editRiderSelect');
-  sel.innerHTML='<option value="">-- Choose rider --</option>'+riders.map(r=>`<option value="${r.RiderId}">${r.Name} (${r.RiderId})</option>`).join('');
+  const res = await API.getRiders();
+  const riders = res.success ? (res.riders || []) : [];
+  const sel = document.getElementById('editRiderSelect');
+  sel.innerHTML = '<option value="">-- Choose rider --</option>'+riders.map(r=>`<option value="${r.riderId}">${r.name} (${r.riderId})</option>`).join('');
 }
 async function loadRiderForEdit(){
-  const id=document.getElementById('editRiderSelect').value;
+  const id = document.getElementById('editRiderSelect').value;
   if(!id){ document.getElementById('editFields').style.display='none'; return; }
-  const res=await API.getRider(id);
-  const r=res.success?res.rider:null;
+  const res = await API.getRider(id);
+  const r = res.success ? res.rider : null;
   if(r){
-    document.getElementById('editRiderId').value=r.RiderId;
-    document.getElementById('editRiderName').value=r.Name;
-    document.getElementById('editRiderEmail').value=r.Email||'';
-    document.getElementById('editRiderPhone').value=r.Phone||'';
-    document.getElementById('editPickupLocation').value=r.PickupLocation;
-    document.getElementById('editDropLocation').value=r.DropLocation;
-    document.getElementById('editRiderRideAmount').value=r.RideAmount||0;
-    document.getElementById('editRiderFrequency').value=r.Frequency||'Both';
-    document.getElementById('editRiderStatus').value=r.Status||'Active';
+    document.getElementById('editRiderId').value = r.riderId;
+    document.getElementById('editRiderName').value = r.name;
+    document.getElementById('editRiderEmail').value = r.email||'';
+    document.getElementById('editRiderPhone').value = r.phone||'';
+    document.getElementById('editPickupLocation').value = r.pickupLocation;
+    document.getElementById('editDropLocation').value = r.dropLocation;
     document.getElementById('editFields').style.display='block';
   } else {
-    alert2('riderAlerts',(res&&res.message)||'Rider not found.','error');
+    alert2('riderAlerts', (res && res.message) || 'Rider not found.', 'error');
   }
 }
 async function saveNewRider(){
   const name=v('riderName'), riderId=v('riderId'), email=v('riderEmail'), phone=v('riderPhone');
   const pwd=v('riderPassword'), pwd2=v('riderPasswordConfirm');
   const pickup=v('pickupLocation'), drop=v('dropLocation');
-  const rideAmount=v('riderRideAmount'), frequency=v('riderFrequency'), status=v('riderStatus');
-  if(!name||!riderId||!pwd||!pickup||!drop||!phone||!rideAmount) return alert2('riderAlerts','Fill all required fields','error');
+  if(!name||!riderId||!pwd||!pickup||!drop) return alert2('riderAlerts','Fill all required fields','error');
   if(pwd!==pwd2) return alert2('riderAlerts','Passwords do not match','error');
   if(pwd.length<6) return alert2('riderAlerts','Password min 6 characters','error');
-  if(Number(rideAmount)<=0) return alert2('riderAlerts','Ride amount must be greater than 0','error');
   spin(true);
   try{
-    const res=await API.addRider({riderId,name,email,phone,password:pwd,pickupLocation:pickup,dropLocation:drop,rideAmount,frequency,status});
-    if(!res.success) return alert2('riderAlerts',res.message||'Could not save rider.','error');
+    const res = await API.addRider({riderId,name,email,phone,password:pwd,pickupLocation:pickup,dropLocation:drop});
+    if(!res.success) return alert2('riderAlerts', res.message || 'Could not save rider.', 'error');
     alert2('riderAlerts',`Rider "${name}" saved. Login ID: ${riderId}`,'success');
-    clearRiderForm(); await loadRidersForTable(); await refreshAll();
+    clearRiderForm();
+    await loadRidersForTable();
+    await refreshAll();
   }catch(e){ alert2('riderAlerts','Error: '+e.message,'error'); }
   finally{ spin(false); }
 }
@@ -948,594 +886,289 @@ async function updateRider(){
   const name=v('editRiderName'), email=v('editRiderEmail'), phone=v('editRiderPhone');
   const pwd=v('editRiderPassword'), pwd2=v('editRiderPasswordConfirm');
   const pickup=v('editPickupLocation'), drop=v('editDropLocation');
-  const rideAmount=v('editRiderRideAmount'), frequency=v('editRiderFrequency'), status=v('editRiderStatus');
   if(!name||!pickup||!drop) return alert2('riderAlerts','Fill all required fields','error');
   if(pwd&&pwd!==pwd2) return alert2('riderAlerts','Passwords do not match','error');
   if(pwd&&pwd.length<6) return alert2('riderAlerts','Password min 6 characters','error');
   spin(true);
   try{
-    const payload={riderId,name,email,phone,pickupLocation:pickup,dropLocation:drop,rideAmount,frequency,status};
-    if(pwd) payload.password=pwd;
-    const res=await API.updateRider(payload);
-    if(!res.success) return alert2('riderAlerts',res.message||'Could not update rider.','error');
+    const payload = {riderId, name, email, phone, pickupLocation:pickup, dropLocation:drop};
+    if(pwd) payload.password = pwd;
+    const res = await API.updateRider(payload);
+    if(!res.success) return alert2('riderAlerts', res.message || 'Could not update rider.', 'error');
     alert2('riderAlerts','Rider updated','success');
-    cancelEditRider(); await loadRidersForTable(); await refreshAll();
+    cancelEditRider();
+    await loadRidersForTable();
+    await refreshAll();
   }catch(e){ alert2('riderAlerts','Error: '+e.message,'error'); }
   finally{ spin(false); }
 }
-function clearRiderForm(){ ['riderName','riderId','riderEmail','riderPhone','riderPassword','riderPasswordConfirm','pickupLocation','dropLocation','riderRideAmount'].forEach(i=>{const el=document.getElementById(i);if(el)el.value='';}); document.getElementById('riderFrequency').value='Both'; document.getElementById('riderStatus').value='Active'; }
+function clearRiderForm(){ ['riderName','riderId','riderEmail','riderPhone','riderPassword','riderPasswordConfirm','pickupLocation','dropLocation'].forEach(i=>{ const el=document.getElementById(i); if(el) el.value=''; }); }
 function cancelEditRider(){ document.getElementById('editRiderSelect').value=''; document.getElementById('editFields').style.display='none'; }
-function filterRiderTable(){ const t=v('riderSearch').toLowerCase(); document.querySelectorAll('#riderTableBody tr').forEach(r=>{r.style.display=r.textContent.toLowerCase().includes(t)?'':'none';}); }
-function editRider(rid){ document.querySelectorAll('#rider-master .cat-btn')[1].click(); document.getElementById('editRiderSelect').value=rid; loadRiderForEdit(); }
+function filterRiderTable(){ const t=v('riderSearch').toLowerCase(); document.querySelectorAll('#riderTableBody tr').forEach(r=>{ r.style.display=r.textContent.toLowerCase().includes(t)?'':'none'; }); }
+function editRider(rid){
+  document.querySelectorAll('.cat-btn')[1].click();
+  document.getElementById('editRiderSelect').value=rid;
+  loadRiderForEdit();
+}
 async function deleteRider(riderId){
   if(!confirm(`Delete rider ${riderId}? This cannot be undone.`)) return;
   spin(true);
   try{
-    const res=await API.deleteRider(riderId);
-    if(!res.success) return alert2('riderAlerts',res.message||'Could not delete rider.','error');
-    alert2('riderAlerts','Rider deleted','success'); await loadRidersForTable(); await refreshAll();
+    const res = await API.deleteRider(riderId);
+    if(!res.success) return alert2('riderAlerts', res.message || 'Could not delete rider.', 'error');
+    alert2('riderAlerts','Rider deleted','success');
+    await loadRidersForTable();
+    await refreshAll();
   }catch(e){ alert2('riderAlerts','Error: '+e.message,'error'); }
   finally{ spin(false); }
 }
 
-/* ── JOURNEY MODULE ── */
-function loadJourneyModule(){
-  document.getElementById('journeyDate').value=new Date().toISOString().split('T')[0];
-  setJourneyCat('create', document.querySelectorAll('#journey .cat-btn')[0]);
-}
-function setJourneyCat(cat,btn){
-  document.querySelectorAll('#journey .cat-btn').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById('journeyCreateSec').style.display=cat==='create'?'block':'none';
-  document.getElementById('journeyListSec').style.display=cat==='list'?'block':'none';
-  if(cat==='list') loadJourneyList();
+/* ══════════════════════════════════════════════════════════
+   TRIP ENTRY
+   ══════════════════════════════════════════════════════════ */
+async function loadTripEntry(){
+  const res = await API.getRiders();
+  const riders = res.success ? (res.riders || []) : [];
+  const sel = document.getElementById('tripRiderName');
+  sel.innerHTML = '<option value="">-- Select Rider --</option>'+riders.map(r=>`<option value="${r.riderId}">${r.name}</option>`).join('');
+  document.getElementById('tripDate').value = new Date().toISOString().split('T')[0];
+  pendingTrips = [];
+  displayedTrips = [];
+  editingTripId = null;
+  renderTripTable([]);
 }
 
-async function loadRidersForJourney(){
-  const session=v('journeySession');
-  if(!session) return alert2('journeyAlerts','Select a session first','error');
-  spin(true);
-  try{
-    const res=await API.getActiveRidersByFrequency(session);
-    if(!res.success){ alert2('journeyAlerts',res.message||'Could not load riders.','error'); return; }
-    journeyRidersCache=res.riders||[];
-    renderJourneyRiderSelection();
-    document.getElementById('journeyRidersCard').style.display='block';
-    if(!journeyRidersCache.length) alert2('journeyAlerts','No active riders found for this session','info');
-  }catch(e){ alert2('journeyAlerts','Error: '+e.message,'error'); }
-  finally{ spin(false); }
+async function addTripRow(){
+  const tripDate=v('tripDate'), session=v('tripSession'), riderId=v('tripRiderName');
+  const amount=parseFloat(document.getElementById('tripRideAmount').value);
+  const payment=v('tripPaymentMethod'), status=v('tripStatus');
+  if(!tripDate||!session||!riderId||!amount||!payment||!status) return alert2('tripAlerts','Fill all fields','error');
+  if(amount<=0) return alert2('tripAlerts','Amount must be > 0','error');
+
+  // If a saved row is being edited, save it in place via API.updateTrip
+  // instead of deleting and recreating it.
+  if(editingTripId){
+    const dupPending = pendingTrips.some(t=>t.tripDate===tripDate&&t.session===session&&t.riderId===riderId);
+    const dupSaved   = displayedTrips.some(t=>t.dbId!==editingTripId&&t.tripDate===tripDate&&t.session===session&&t.riderId===riderId);
+    if(dupPending||dupSaved) return alert2('tripAlerts','Rider already added for this date & session','error');
+    spin(true);
+    try{
+      const res = await API.updateTrip({tripId:editingTripId, tripDate, session, riderId, rideAmount:amount, paymentMethod:payment, status});
+      if(!res.success){ alert2('tripAlerts', res.message || 'Could not update trip.', 'error'); return; }
+      editingTripId = null;
+      document.getElementById('tripRideAmount').value='';
+      document.getElementById('tripPaymentMethod').value='';
+      document.getElementById('tripStatus').value='';
+      await filterTrips();
+      await refreshAll();
+      alert2('tripAlerts','Transaction updated','success');
+    }catch(e){ alert2('tripAlerts','Error: '+e.message,'error'); }
+    finally{ spin(false); }
+    return;
+  }
+
+  // Allow same rider in different sessions; block duplicate in same date+session
+  const dupPending = pendingTrips.some(t=>t.tripDate===tripDate&&t.session===session&&t.riderId===riderId);
+  const dupSaved   = displayedTrips.some(t=>t.tripDate===tripDate&&t.session===session&&t.riderId===riderId);
+  if(dupPending||dupSaved) return alert2('tripAlerts','Rider already added for this date & session','error');
+
+  const riderName = document.getElementById('tripRiderName').selectedOptions[0].text;
+  const row = {tempId:'t'+Date.now(), dbId:null, tripDate, session, riderId, riderName, rideAmount:amount, paymentMethod:payment, status, pending:true};
+  pendingTrips.push(row);
+
+  document.getElementById('tripRideAmount').value='';
+  document.getElementById('tripPaymentMethod').value='';
+  document.getElementById('tripStatus').value='';
+
+  // Merge pending with displayed (saved) rows and re-render
+  mergeAndRenderTrips();
+  alert2('tripAlerts','Transaction added','success');
 }
-function renderJourneyRiderSelection(){
-  const c=document.getElementById('journeyRidersList');
-  if(!journeyRidersCache.length){ c.innerHTML='<div class="empty-state">No active riders match this session</div>'; return; }
-  c.innerHTML=journeyRidersCache.map((r,i)=>`
-    <div class="rider-select-row" id="jr-row-${i}">
-      <input type="checkbox" id="jr-check-${i}" onchange="toggleJourneyRider(${i})">
-      <div class="rider-select-info">
-        <div class="rn">${r.Name} <span style="font-weight:400;color:#94a3b8;">(${r.RiderId})</span></div>
-        <div class="rd">${r.PickupLocation} → ${r.DropLocation} · ${r.Frequency}</div>
-      </div>
-      <div class="rider-select-amount">
-        <input type="number" id="jr-amount-${i}" value="${Number(r.RideAmount||0).toFixed(2)}" step="0.01" min="0" onchange="recalcJourneyTotal()" disabled>
-      </div>
-      <div class="rider-select-wallet">₹${Number(r.WalletBalance||0).toFixed(2)}</div>
-    </div>`).join('');
-  recalcJourneyTotal();
+
+function mergeAndRenderTrips(){
+  // displayedTrips holds already-saved trips fetched from the sheet
+  // pendingTrips holds newly staged rows not yet saved
+  const combined = [...displayedTrips, ...pendingTrips];
+  renderTripTable(combined);
 }
-function toggleJourneyRider(i){
-  const row=document.getElementById(`jr-row-${i}`);
-  const check=document.getElementById(`jr-check-${i}`);
-  const amtInput=document.getElementById(`jr-amount-${i}`);
-  row.classList.toggle('checked', check.checked);
-  amtInput.disabled=!check.checked;
-  recalcJourneyTotal();
-}
-function recalcJourneyTotal(){
+
+function renderTripTable(rows){
+  const tbody = document.getElementById('tripTableBody');
+  if(!rows.length){ tbody.innerHTML='<tr><td colspan="6" class="empty-state">No transactions</td></tr>'; document.getElementById('tripTotalAmount').textContent='0.00'; return; }
   let total=0;
-  journeyRidersCache.forEach((r,i)=>{
-    const check=document.getElementById(`jr-check-${i}`);
-    if(check&&check.checked) total+=Number(document.getElementById(`jr-amount-${i}`).value||0);
-  });
-  document.getElementById('journeySelectedTotal').textContent=total.toFixed(2);
-}
-async function submitCreateJourney(){
-  const journeyDate=v('journeyDate'), session=v('journeySession');
-  if(!journeyDate||!session) return alert2('journeyAlerts','Select date and session','error');
-  const selected=[];
-  journeyRidersCache.forEach((r,i)=>{
-    const check=document.getElementById(`jr-check-${i}`);
-    if(check&&check.checked){
-      const amt=Number(document.getElementById(`jr-amount-${i}`).value||0);
-      selected.push({riderId:r.RiderId, riderName:r.Name, rideAmount:amt});
-    }
-  });
-  if(!selected.length) return alert2('journeyAlerts','Select at least one rider','error');
-  spin(true);
-  try{
-    const res=await API.createJourney(journeyDate,session,selected,'');
-    if(!res.success) return alert2('journeyAlerts',res.message||'Could not create journey.','error');
-    alert2('journeyAlerts',`Journey created with ${selected.length} rider(s). Total ₹${selected.reduce((s,r)=>s+r.rideAmount,0).toFixed(2)}`,'success');
-    document.getElementById('journeyRidersCard').style.display='none';
-    document.getElementById('journeySession').value='';
-    journeyRidersCache=[];
-    await refreshAll();
-    setJourneyCat('list', document.querySelectorAll('#journey .cat-btn')[1]);
-  }catch(e){ alert2('journeyAlerts','Error: '+e.message,'error'); }
-  finally{ spin(false); }
-}
-
-async function loadJourneyList(){
-  const status=v('journeyFilterStatus'), date=v('journeyFilterDate');
-  spin(true);
-  try{
-    const opts={}; if(status) opts.status=status; if(date){opts.dateFrom=date;opts.dateTo=date;}
-    const res=await API.getJourneys(opts);
-    if(!res.success){ alert2('journeyAlerts',res.message||'Could not load journeys.','error'); return; }
-    renderJourneyList(res.journeys||[]);
-  }catch(e){ alert2('journeyAlerts','Error: '+e.message,'error'); }
-  finally{ spin(false); }
-}
-function renderJourneyList(journeys){
-  const c=document.getElementById('journeyListContainer');
-  if(!journeys.length){ c.innerHTML='<div class="empty-state">No journeys found</div>'; return; }
-  c.innerHTML=journeys.map(j=>{
-    const riderCount=(j.SelectedRiderIDs||'').split(',').filter(Boolean).length;
-    const statusClass=j.Status.toLowerCase();
-    return `<div class="journey-card">
-      <div class="journey-card-top">
-        <div>
-          <div class="journey-card-date">${j.JourneyDate} · ${j.Session}</div>
-          <div class="journey-card-meta">Journey ID: ${j.JourneyID}</div>
-        </div>
-        <span class="badge badge-${statusClass}">${j.Status}</span>
-      </div>
-      <div class="journey-card-stats">
-        <div class="journey-card-stat">Riders<b>${riderCount}</b></div>
-        <div class="journey-card-stat">Total Amount<b>₹${Number(j.TotalAmount||0).toFixed(2)}</b></div>
-      </div>
-      <div class="btn-group">
-        <button class="btn btn-info" onclick="viewJourneyDetail('${j.JourneyID}')">View / Manage</button>
-        ${j.Status==='Draft' ? `<button class="btn btn-primary" onclick="startJourneyAction('${j.JourneyID}')">Start Journey</button>` : ''}
-        ${j.Status==='Started' ? `<button class="btn btn-success" onclick="viewJourneyDetail('${j.JourneyID}')">Collect Payments</button>` : ''}
-        ${j.Status==='Draft' ? `<button class="btn btn-danger" onclick="deleteJourneyAction('${j.JourneyID}')">Delete</button>` : ''}
-      </div>
-    </div>`;
-  }).join('');
-}
-
-async function startJourneyAction(journeyId){
-  if(!confirm('Start this journey?')) return;
-  spin(true);
-  try{
-    const res=await API.startJourney(journeyId);
-    if(!res.success) return alert2('journeyAlerts',res.message||'Could not start journey.','error');
-    alert2('journeyAlerts','Journey started','success');
-    loadJourneyList();
-  }catch(e){ alert2('journeyAlerts','Error: '+e.message,'error'); }
-  finally{ spin(false); }
-}
-async function deleteJourneyAction(journeyId){
-  if(!confirm('Delete this journey? This cannot be undone.')) return;
-  spin(true);
-  try{
-    const res=await API.deleteJourney(journeyId);
-    if(!res.success) return alert2('journeyAlerts',res.message||'Could not delete journey.','error');
-    alert2('journeyAlerts','Journey deleted','success'); loadJourneyList();
-  }catch(e){ alert2('journeyAlerts','Error: '+e.message,'error'); }
-  finally{ spin(false); }
-}
-
-async function viewJourneyDetail(journeyId){
-  spin(true);
-  try{
-    const res=await API.getJourney(journeyId);
-    if(!res.success){ alert2('journeyAlerts',res.message||'Could not load journey.','error'); return; }
-    currentJourneyForPayment=res.journey;
-    document.getElementById('journeyDetailTitle').textContent=`${res.journey.JourneyDate} · ${res.journey.Session} · ${res.journey.Status}`;
-    const details=res.details||[];
-    document.getElementById('journeyDetailBody').innerHTML = details.length ? `
-      <div class="table-wrap"><table><thead><tr><th>Rider</th><th>Amount</th><th>Status</th><th>Method</th><th>Action</th></tr></thead><tbody>
-      ${details.map(d=>`<tr>
-        <td>${d.RiderName}</td><td>₹${Number(d.RideAmount).toFixed(2)}</td>
-        <td><span class="badge badge-${d.PaymentStatus==='Paid'?'paid':'pending'}">${d.PaymentStatus}</span></td>
-        <td>${d.PaymentMethod||'-'}</td>
-        <td>${d.PaymentStatus!=='Paid' ? `<button class="btn btn-purple" style="padding:.4rem .7rem;font-size:.75rem;" onclick="openQRModal('${journeyId}','${d.RiderId}','${d.DetailID}')">Collect</button>` : '✓'}</td>
-      </tr>`).join('')}
-      </tbody></table></div>
-      ${res.journey.Status==='Started' ? `<div class="btn-group" style="margin-top:1rem;"><button class="btn btn-success" onclick="completeJourneyAction('${journeyId}')">Mark Journey Complete</button></div>` : ''}
-    ` : '<div class="empty-state">No riders in this journey</div>';
-    document.getElementById('journeyDetailModal').classList.add('active');
-  }catch(e){ alert2('journeyAlerts','Error: '+e.message,'error'); }
-  finally{ spin(false); }
-}
-function closeJourneyDetailModal(){ document.getElementById('journeyDetailModal').classList.remove('active'); }
-
-async function completeJourneyAction(journeyId){
-  if(!confirm('Mark journey as complete?')) return;
-  spin(true);
-  try{
-    const res=await API.completeJourney(journeyId);
-    if(!res.success) return alert2('journeyAlerts',res.message||'Could not complete journey.','error');
-    alert2('journeyAlerts','Journey marked complete','success');
-    closeJourneyDetailModal(); loadJourneyList(); await refreshAll();
-  }catch(e){ alert2('journeyAlerts','Error: '+e.message,'error'); }
-  finally{ spin(false); }
-}
-
-/* ── QR PAYMENT COLLECTION ── */
-async function openQRModal(journeyId,riderId,detailId){
-  spin(true);
-  try{
-    const res=await API.getQRPaymentData(journeyId,riderId);
-    if(!res.success) return alert2('journeyAlerts',res.message||'Could not generate QR.','error');
-    document.getElementById('qrPaymentBody').innerHTML=`
-      <div class="qr-payment-card">
-        <div class="qr-payment-name">${res.payload.riderName}</div>
-        <div class="qr-payment-amount">₹${Number(res.payload.amount).toFixed(2)}</div>
-        <img src="${res.qrImageUrl}" width="200" height="200" alt="QR Code">
-        <div class="payment-method-selector">
-          <button class="pm-btn" id="pm-wallet" onclick="selectPaymentMethod('Wallet')">Wallet</button>
-          <button class="pm-btn" id="pm-upi" onclick="selectPaymentMethod('UPI')">UPI/Card</button>
-          <button class="pm-btn" id="pm-cash" onclick="selectPaymentMethod('Cash')">Cash</button>
-        </div>
-      </div>
-      <div class="btn-group" style="justify-content:center;margin-top:1rem;">
-        <button class="btn btn-success" onclick="confirmQRPayment('${detailId}')">Confirm Payment</button>
-      </div>`;
-    window._qrPaymentMethod=null;
-    document.getElementById('qrPaymentModal').classList.add('active');
-  }catch(e){ alert2('journeyAlerts','Error: '+e.message,'error'); }
-  finally{ spin(false); }
-}
-function selectPaymentMethod(method){
-  window._qrPaymentMethod=method;
-  document.querySelectorAll('.pm-btn').forEach(b=>b.classList.remove('active'));
-  document.getElementById('pm-'+method.toLowerCase().split('/')[0]).classList.add('active');
-}
-async function confirmQRPayment(detailId){
-  if(!window._qrPaymentMethod) return alert2('alertContainer','Select a payment method','error');
-  spin(true);
-  try{
-    const res=await API.updateJourneyDetail({detailId, paymentStatus:'Paid', paymentMethod:window._qrPaymentMethod});
-    if(!res.success) return alert2('alertContainer',res.message||'Payment update failed.','error');
-    alert2('alertContainer','Payment recorded successfully','success');
-    closeQRModal();
-    if(currentJourneyForPayment) viewJourneyDetail(currentJourneyForPayment.JourneyID);
-    await refreshAll();
-  }catch(e){ alert2('alertContainer','Error: '+e.message,'error'); }
-  finally{ spin(false); }
-}
-function closeQRModal(){ document.getElementById('qrPaymentModal').classList.remove('active'); }
-
-/* ── WALLET MODULE ── */
-async function loadWalletModule(){
-  if(currentUser.isAdmin){
-    document.getElementById('walletAdminView').style.display='block';
-    document.getElementById('walletRiderView').style.display='none';
-    await loadWalletRiderDropdown();
-    await loadAllWallets();
-    await loadPendingWalletRequests();
-  } else {
-    document.getElementById('walletAdminView').style.display='none';
-    document.getElementById('walletRiderView').style.display='block';
-    await loadMyWallet();
-  }
-}
-async function loadWalletRiderDropdown(){
-  const res=await API.getRiders();
-  const riders=res.success?(res.riders||[]):[];
-  const sel=document.getElementById('walletRiderSelect');
-  sel.innerHTML='<option value="">-- Select Rider --</option>'+riders.map(r=>`<option value="${r.RiderId}">${r.Name} (${r.RiderId})</option>`).join('');
-}
-async function loadPendingWalletRequests(){
-  const res=await API.getPendingWalletRequests();
-  if(!res.success){ alert2('walletAlerts',res.message||'Could not load requests.','error'); return; }
-  const reqs=res.requests||[];
-  document.getElementById('walletRequestsTableBody').innerHTML=reqs.length
-    ? reqs.map(r=>`<tr>
-        <td><strong>${r.RiderId}</strong></td>
-        <td>₹${Number(r.Amount).toFixed(2)}</td>
-        <td>${new Date(r.CreatedAt).toLocaleString()}</td>
-        <td>${r.Notes||'-'}</td>
-        <td><div class="btn-group">
-          <button class="btn btn-success" style="padding:.4rem .6rem;font-size:.72rem;" onclick="approveTopupRequest('${r.TransactionID}')">Approve</button>
-          <button class="btn btn-danger" style="padding:.4rem .6rem;font-size:.72rem;" onclick="rejectTopupRequest('${r.TransactionID}')">Reject</button>
-        </div></td>
-      </tr>`).join('')
-    : '<tr><td colspan="5" class="empty-state">No pending requests</td></tr>';
-}
-async function approveTopupRequest(transactionId){
-  if(!confirm('Approve this top-up request? Funds will be added to the rider wallet.')) return;
-  spin(true);
-  try{
-    const res=await API.approveWalletTopupRequest(transactionId, currentUser.isAdmin);
-    if(!res.success) return alert2('walletAlerts',res.message||'Could not approve request.','error');
-    alert2('walletAlerts',`Request approved. New balance: ₹${Number(res.newBalance).toFixed(2)}`,'success');
-    await loadPendingWalletRequests(); await loadAllWallets(); await refreshAll();
-  }catch(e){ alert2('walletAlerts','Error: '+e.message,'error'); }
-  finally{ spin(false); }
-}
-async function rejectTopupRequest(transactionId){
-  if(!confirm('Reject this top-up request?')) return;
-  spin(true);
-  try{
-    const res=await API.rejectWalletTopupRequest(transactionId, currentUser.isAdmin);
-    if(!res.success) return alert2('walletAlerts',res.message||'Could not reject request.','error');
-    alert2('walletAlerts','Request rejected','info');
-    await loadPendingWalletRequests();
-  }catch(e){ alert2('walletAlerts','Error: '+e.message,'error'); }
-  finally{ spin(false); }
-}
-async function loadAllWallets(){
-  const res=await API.getAllWallets();
-  if(!res.success){ alert2('walletAlerts',res.message||'Could not load wallets.','error'); return; }
-  const wallets=res.wallets||[];
-  document.getElementById('walletTableBody').innerHTML=wallets.length
-    ? wallets.map(w=>`<tr>
-        <td><strong>${w.RiderName}</strong> <span style="color:#94a3b8;font-size:.78rem;">(${w.RiderId})</span></td>
-        <td>₹${Number(w.Balance||0).toFixed(2)}</td>
-        <td>₹${Number(w.TotalTopups||0).toFixed(2)}</td>
-        <td>${w.LastTransaction ? new Date(w.LastTransaction).toLocaleString() : '-'}</td>
-        <td><button class="icon-btn icon-btn-wallet" onclick="viewWalletHistory('${w.RiderId}','${w.RiderName}')" title="History"><svg viewBox="0 0 24 24"><path d="M12 8v4l3 3M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18z"/></svg></button></td>
-      </tr>`).join('')
-    : '<tr><td colspan="5" class="empty-state">No wallets yet</td></tr>';
-}
-async function addFundsToWallet(){
-  const riderId=v('walletRiderSelect'), amount=v('walletAddAmount'), purpose=v('walletAddPurpose'), notes=v('walletAddNotes');
-  if(!riderId||!amount) return alert2('walletAlerts','Select rider and enter amount','error');
-  if(Number(amount)<=0) return alert2('walletAlerts','Amount must be greater than 0','error');
-  spin(true);
-  try{
-    const res=await API.addWalletFunds(riderId,amount,purpose,notes);
-    if(!res.success) return alert2('walletAlerts',res.message||'Could not add funds.','error');
-    alert2('walletAlerts',`Funds added. New balance: ₹${Number(res.newBalance).toFixed(2)}`,'success');
-    document.getElementById('walletAddAmount').value='';
-    document.getElementById('walletAddNotes').value='';
-    await loadAllWallets(); await refreshAll();
-  }catch(e){ alert2('walletAlerts','Error: '+e.message,'error'); }
-  finally{ spin(false); }
-}
-async function viewWalletHistory(riderId,riderName){
-  spin(true);
-  try{
-    const res=await API.getWalletTransactions(riderId);
-    if(!res.success){ alert2('walletAlerts',res.message||'Could not load history.','error'); return; }
-    document.getElementById('walletHistoryTitle').textContent=`Wallet History — ${riderName}`;
-    const txns=res.transactions||[];
-    document.getElementById('walletHistoryBody').innerHTML=txns.length
-      ? txns.map(t=>`<tr><td>${new Date(t.CreatedAt).toLocaleDateString()}</td><td><span class="badge badge-${t.Type==='In'?'paid':'balance'}">${t.Type}</span></td><td>₹${Number(t.Amount).toFixed(2)}</td><td>${t.Purpose}</td></tr>`).join('')
-      : '<tr><td colspan="4" class="empty-state">No transactions</td></tr>';
-    document.getElementById('walletHistoryModal').classList.add('active');
-  }catch(e){ alert2('walletAlerts','Error: '+e.message,'error'); }
-  finally{ spin(false); }
-}
-function closeWalletHistoryModal(){ document.getElementById('walletHistoryModal').classList.remove('active'); }
-
-async function startTopupPayment(){
-  const amount=v('myTopupAmount');
-  if(!amount) return alert2('walletAlerts','Enter an amount','error');
-  if(Number(amount)<=0) return alert2('walletAlerts','Amount must be greater than 0','error');
-  spin(true);
-  try{
-    const res=await API.getUpiTopupLink(amount, currentUser.userId);
-    if(!res.success) return alert2('walletAlerts',res.message||'Could not start payment.','error');
-    document.getElementById('topupSendApprovalBtn').disabled=false;
-    window.location.href=res.upiUrl;
-  }catch(e){ alert2('walletAlerts','Error: '+e.message,'error'); }
-  finally{ spin(false); }
-}
-async function submitTopupRequest(){
-  const amount=v('myTopupAmount'), notes=v('myTopupNotes');
-  if(!amount) return alert2('walletAlerts','Enter an amount','error');
-  if(Number(amount)<=0) return alert2('walletAlerts','Amount must be greater than 0','error');
-  if(!confirm('Send this top-up for admin approval? Only do this after you have completed the UPI payment.')) return;
-  spin(true);
-  try{
-    const res=await API.requestWalletTopup(currentUser.userId, amount, notes);
-    if(!res.success) return alert2('walletAlerts',res.message||'Could not submit request.','error');
-    alert2('walletAlerts','Top-up sent for admin approval.','success');
-    document.getElementById('myTopupAmount').value='';
-    document.getElementById('myTopupNotes').value='';
-    document.getElementById('topupSendApprovalBtn').disabled=true;
-    await loadMyWallet();
-  }catch(e){ alert2('walletAlerts','Error: '+e.message,'error'); }
-  finally{ spin(false); }
-}
-function walletStatusBadge(status){
-  if(status==='Pending') return 'pendingconfirmation';
-  if(status==='Rejected') return 'balance';
-  return 'paid'; // Success / Approved
-}
-async function loadMyWallet(){
-  spin(true);
-  try{
-    const res=await API.getWallet(currentUser.userId);
-    if(res.success){ document.getElementById('myWalletBalance').textContent='₹'+Number(res.wallet.Balance||0).toFixed(2); }
-    const txRes=await API.getWalletTransactions(currentUser.userId);
-    const txns=txRes.success?(txRes.transactions||[]):[];
-    document.getElementById('myWalletTxnBody').innerHTML=txns.length
-      ? txns.map(t=>`<tr><td>${new Date(t.CreatedAt).toLocaleDateString()}</td><td><span class="badge badge-${t.Type==='In'?'paid':'balance'}">${t.Type}</span></td><td>₹${Number(t.Amount).toFixed(2)}</td><td>${t.Purpose}</td><td><span class="badge badge-${walletStatusBadge(t.Status)}">${t.Status||'Success'}</span></td></tr>`).join('')
-      : '<tr><td colspan="5" class="empty-state">No transactions yet</td></tr>';
-  }catch(e){ alert2('walletAlerts','Error: '+e.message,'error'); }
-  finally{ spin(false); }
-}
-
-/* ── REPORTS ── */
-async function initReportFilters(){
-  document.getElementById('reportCatSelector').style.display=currentUser.isAdmin?'flex':'none';
-  setReportCat('journey', document.querySelectorAll('#reportCatSelector .cat-btn')[0]);
-  const riderFG=document.getElementById('reportRiderFG');
-  if(currentUser.isAdmin){
-    riderFG.style.display='block';
-    const res=await API.getRiders();
-    const riders=res.success?(res.riders||[]):[];
-    const opts='<option value="">All Riders</option>'+riders.map(r=>`<option value="${r.RiderId}">${r.Name} (${r.RiderId})</option>`).join('');
-    document.getElementById('reportRiderFilter').innerHTML=opts;
-    document.getElementById('walletReportRiderFG').style.display='block';
-    document.getElementById('walletReportRiderFilter').innerHTML=opts;
-  } else {
-    riderFG.style.display='none';
-  }
-  document.getElementById('reportFromDate').value='';
-  document.getElementById('reportToDate').value='';
-  document.getElementById('reportSearchType').value='all';
-  generateReport();
-}
-function setReportCat(cat,btn){
-  document.querySelectorAll('#reportCatSelector .cat-btn').forEach(b=>b.classList.remove('active'));
-  if(btn) btn.classList.add('active');
-  document.getElementById('journeyReportSec').style.display=cat==='journey'?'block':'none';
-  document.getElementById('walletReportSec').style.display=cat==='wallet'?'block':'none';
-  if(cat==='wallet'){
-    document.getElementById('walletReportFromDate').value='';
-    document.getElementById('walletReportToDate').value='';
-    generateWalletReport();
-  }
-}
-async function generateReport(){
-  const statusFilter = v('reportSearchType')==='outstanding' ? 'outstanding' : '';
-  const dateFrom = v('reportFromDate'), dateTo = v('reportToDate');
-  const filterRiderId = currentUser.isAdmin ? v('reportRiderFilter') : '';
-  spin(true);
-  try{
-    const res=await API.getMyReport(currentUser.isAdmin, currentUser.userId, dateFrom, dateTo, statusFilter, filterRiderId);
-    if(!res.success){ alert2('reportAlerts',res.message||'Could not generate report.','error'); return; }
-    renderReport(res.rows||[], res.stats||{});
-  }catch(e){ alert2('reportAlerts','Error: '+e.message,'error'); }
-  finally{ spin(false); }
-}
-function renderReport(rows, stats){
-  const c=document.getElementById('reportContainer'), s=document.getElementById('reportStats');
-  if(!rows.length){ c.style.display='none'; s.style.display='none'; alert2('reportAlerts','No journeys found','info'); return; }
-  document.getElementById('reportTableBody').innerHTML=rows.map(r=>{
-    const statusClass = r.PaymentStatus==='Paid' ? 'paid' : (r.PaymentStatus==='Pending Confirmation' ? 'pendingconfirmation' : 'pending');
-    let action = '-';
-    if(r.PaymentStatus==='Pending'){
-      action = `<button class="btn btn-purple" style="padding:.4rem .7rem;font-size:.75rem;" onclick="openRiderPayModal('${r.DetailID}','${r.RiderId}','${r.RiderName}',${r.RideAmount})">Pay Now</button>`;
-    } else if(r.PaymentStatus==='Pending Confirmation'){
-      action = currentUser.isAdmin
-        ? `<div class="btn-group">
-             <button class="btn btn-success" style="padding:.4rem .6rem;font-size:.72rem;" onclick="approveUpiReport('${r.DetailID}')">Approve</button>
-             <button class="btn btn-danger" style="padding:.4rem .6rem;font-size:.72rem;" onclick="rejectUpiReport('${r.DetailID}')">Reject</button>
-           </div>`
-        : `<span style="font-size:.78rem;color:#94a3b8;">Awaiting confirmation</span>`;
-    }
-    return `<tr>
-      <td>${r.JourneyDate}</td>
-      <td>${r.Session}</td>
-      <td>${r.RiderName}</td>
-      <td>₹${Number(r.RideAmount).toFixed(2)}</td>
-      <td><span class="badge badge-${statusClass}">${r.PaymentStatus}</span></td>
-      <td>${r.PaymentMethod||'-'}</td>
-      <td>${action}</td>
+  tbody.innerHTML = rows.map((t,i)=>{
+    total += Number(t.rideAmount);
+    const isPending = !!t.pending;
+    const rowId = isPending ? t.tempId : t.dbId;
+    return `<tr style="${isPending?'background:#fffbf2;':''}">
+      <td>${i+1}</td><td>${t.riderName}${isPending?'<span style="font-size:.7rem;color:#FF9500;margin-left:.3rem;">unsaved</span>':''}</td>
+      <td>₹${Number(t.rideAmount).toFixed(2)}</td><td>${t.paymentMethod}</td>
+      <td><span class="badge badge-${t.status.toLowerCase()}">${t.status}</span></td>
+      <td><div class="action-buttons">
+        <button class="icon-btn icon-btn-edit" onclick="editTripRow('${rowId}',${isPending})" title="Edit"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+        <button class="icon-btn icon-btn-delete" onclick="deleteTripRow('${rowId}',${isPending})" title="Delete"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z"/></svg></button>
+      </div></td>
     </tr>`;
   }).join('');
-  c.style.display='block';
-  document.getElementById('rptTotal').textContent=stats.totalCount||0;
-  document.getElementById('rptAmount').textContent='₹'+Number(stats.totalAmount||0).toFixed(2);
-  document.getElementById('rptPaid').textContent='₹'+Number(stats.paidAmount||0).toFixed(2);
-  document.getElementById('rptOutstanding').textContent='₹'+Number(stats.outstandingAmount||0).toFixed(2);
-  s.style.display='block';
+  document.getElementById('tripTotalAmount').textContent = total.toFixed(2);
 }
 
-/* ── RIDER SELF-PAYMENT MODAL (Wallet or UPI, no Cash) ── */
-async function openRiderPayModal(detailId, riderId, riderName, amount){
-  document.getElementById('riderPayBody').innerHTML=`
-    <div class="qr-payment-card">
-      <div class="qr-payment-name">${riderName}</div>
-      <div class="qr-payment-amount">₹${Number(amount).toFixed(2)}</div>
-      <div id="riderPayWalletInfo" style="font-size:.82rem;color:#94a3b8;margin-top:-.5rem;margin-bottom:.5rem;">Checking wallet balance…</div>
-      <div class="payment-method-selector">
-        <button class="pm-btn" id="rp-wallet" onclick="selectRiderPayMethod('${detailId}','${riderId}','Wallet')">Pay via Wallet</button>
-        <button class="pm-btn" id="rp-upi" onclick="selectRiderPayMethod('${detailId}','${riderId}','UPI')">Pay via UPI</button>
-      </div>
-      <div id="riderPayUpiActions" style="display:none;margin-top:1rem;">
-        <button class="btn btn-info" style="width:100%;justify-content:center;" onclick="reportPaymentDone('${detailId}','${riderId}')">I've Paid — Send for Approval</button>
-      </div>
-    </div>`;
-  document.getElementById('riderPayModal').classList.add('active');
-  try{
-    const res=await API.getWallet(riderId);
-    const infoEl=document.getElementById('riderPayWalletInfo');
-    if(!infoEl) return; // modal may have closed already
-    if(res.success){
-      const balance=Number(res.wallet.Balance||0);
-      const enough=balance>=Number(amount);
-      infoEl.innerHTML=`Wallet balance: <strong style="color:${enough?'#1f9d55':'#d93939'}">₹${balance.toFixed(2)}</strong>${enough?'':' — not enough to cover this amount'}`;
-    } else {
-      infoEl.textContent='Wallet balance unavailable';
-    }
-  }catch(e){
-    const infoEl=document.getElementById('riderPayWalletInfo');
-    if(infoEl) infoEl.textContent='Wallet balance unavailable';
-  }
-}
-function closeRiderPayModal(){ document.getElementById('riderPayModal').classList.remove('active'); }
-async function selectRiderPayMethod(detailId, riderId, method){
-  document.querySelectorAll('#riderPayBody .pm-btn').forEach(b=>b.classList.remove('active'));
-  document.getElementById(method==='Wallet'?'rp-wallet':'rp-upi').classList.add('active');
-  if(method==='Wallet'){
-    if(!confirm('Pay this amount from wallet balance now?')) return;
-    spin(true);
-    try{
-      const res=await API.payOutstandingViaWallet(detailId, riderId);
-      if(!res.success) return alert2('alertContainer',res.message||'Could not pay from wallet.','error');
-      alert2('alertContainer',`Paid from wallet. New balance: ₹${Number(res.newBalance).toFixed(2)}`,'success');
-      closeRiderPayModal();
-      await generateReport(); await refreshAll();
-    }catch(e){ alert2('alertContainer','Error: '+e.message,'error'); }
-    finally{ spin(false); }
+async function editTripRow(rowId, isPending){
+  let row;
+  if(isPending){
+    row = pendingTrips.find(t=>t.tempId===rowId);
+    if(!row) return;
+    document.getElementById('tripRiderName').value   = row.riderId;
+    document.getElementById('tripRideAmount').value  = row.rideAmount;
+    document.getElementById('tripPaymentMethod').value= row.paymentMethod;
+    document.getElementById('tripStatus').value      = row.status;
+    pendingTrips = pendingTrips.filter(t=>t.tempId!==rowId);
+    mergeAndRenderTrips();
   } else {
+    // Saved row: load it into the form for in-place editing. The
+    // actual save (API.updateTrip) happens when the user re-submits
+    // via addTripRow — nothing is deleted from the sheet here.
+    row = displayedTrips.find(t=>t.dbId===rowId);
+    if(!row) return;
+    document.getElementById('tripDate').value        = row.tripDate;
+    document.getElementById('tripSession').value      = row.session;
+    document.getElementById('tripRiderName').value   = row.riderId;
+    document.getElementById('tripRideAmount').value  = row.rideAmount;
+    document.getElementById('tripPaymentMethod').value= row.paymentMethod;
+    document.getElementById('tripStatus').value      = row.status;
+    editingTripId = rowId;
+    alert2('tripAlerts','Editing transaction — update the fields and click Add Transaction to save','info');
+  }
+}
+
+async function deleteTripRow(rowId, isPending){
+  if(isPending){
+    pendingTrips = pendingTrips.filter(t=>t.tempId!==rowId);
+    mergeAndRenderTrips();
+    alert2('tripAlerts','Transaction removed','success');
+  } else {
+    // Delete a persisted record straight from the sheet
+    if(!confirm('Delete this saved transaction?')) return;
     spin(true);
     try{
-      const res=await API.getUpiPaymentLink(detailId);
-      if(!res.success) return alert2('alertContainer',res.message||'Could not start payment.','error');
-      document.getElementById('riderPayUpiActions').style.display='block';
-      window.location.href=res.upiUrl;
-    }catch(e){ alert2('alertContainer','Error: '+e.message,'error'); }
+      const res = await API.deleteTrip(rowId);
+      if(!res.success){ alert2('tripAlerts', res.message || 'Delete failed.', 'error'); return; }
+      displayedTrips = displayedTrips.filter(t=>t.dbId!==rowId);
+      mergeAndRenderTrips();
+      await refreshAll();
+      alert2('tripAlerts','Transaction deleted','success');
+    }catch(e){ alert2('tripAlerts','Delete error: '+e.message,'error'); }
     finally{ spin(false); }
   }
 }
-async function reportPaymentDone(detailId, riderId){
-  if(!confirm('Send this payment for admin approval? Only do this after the UPI payment is complete.')) return;
+
+async function saveAllTrips(){
+  if(isSavingTrips) return; // guard against duplicate submissions
+  const tripDate=v('tripDate'), session=v('tripSession');
+  if(!tripDate||!session) return alert2('tripAlerts','Select date and session','error');
+  if(!pendingTrips.length) return alert2('tripAlerts','No new transactions to save','error');
+  isSavingTrips = true;
   spin(true);
   try{
-    const res=await API.reportUpiPayment(detailId, riderId);
-    if(!res.success) return alert2('alertContainer',res.message||'Could not report payment.','error');
-    alert2('alertContainer','Payment reported. Waiting for admin confirmation.','success');
-    closeRiderPayModal();
-    await generateReport();
-  }catch(e){ alert2('alertContainer','Error: '+e.message,'error'); }
+    const failures = [];
+    for(const t of pendingTrips){
+      const res = await API.addTrip({
+        tripDate, session, riderId:t.riderId,
+        rideAmount:t.rideAmount, paymentMethod:t.paymentMethod, status:t.status
+      });
+      if(res.success && res.trip){
+        displayedTrips.push({...res.trip, pending:false, tempId:null});
+      } else {
+        failures.push(`${t.riderName}: ${res.message || 'failed'}`);
+      }
+    }
+    pendingTrips = pendingTrips.filter(t => failures.some(f=>f.startsWith(t.riderName+':')));
+    mergeAndRenderTrips();
+    await refreshAll();
+    if(failures.length){
+      alert2('tripAlerts', 'Some transactions could not be saved: '+failures.join('; '), 'error');
+    } else {
+      alert2('tripAlerts','All transactions saved','success');
+      document.getElementById('tripDate').value = new Date().toISOString().split('T')[0];
+      document.getElementById('tripSession').value='';
+    }
+  }catch(e){ alert2('tripAlerts','Save error: '+e.message,'error'); }
+  finally{ spin(false); isSavingTrips = false; }
+}
+
+async function filterTrips(){
+  const date=document.getElementById('searchTripDate').value;
+  const sess=document.getElementById('searchTripSession').value;
+  if(!date){ displayedTrips=[]; pendingTrips=[]; renderTripTable([]); return; }
+  spin(true);
+  try{
+    const res = await API.getTrips({
+      isAdmin: currentUser.isAdmin,
+      userId: currentUser.userId,
+      date: date,
+      session: sess || undefined
+    });
+    if(!res.success){ alert2('tripAlerts', res.message || 'Could not load transactions.', 'error'); return; }
+    displayedTrips = res.trips || [];
+    pendingTrips=[];
+    mergeAndRenderTrips();
+  }catch(e){ alert2('tripAlerts','Filter error: '+e.message,'error'); }
   finally{ spin(false); }
 }
-async function approveUpiReport(detailId){
-  if(!confirm('Confirm this payment was received?')) return;
+
+/* ══════════════════════════════════════════════════════════
+   REPORTS
+   ══════════════════════════════════════════════════════════ */
+function initReportFilters(){
+  const now=new Date();
+  document.getElementById('reportMonth').value=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  generateReport();
+}
+function updateReportFilters(){
+  const t=v('reportSearchType');
+  document.getElementById('monthFG').style.display = t==='month'?'block':'none';
+  document.getElementById('fromFG').style.display  = t==='daterange'?'block':'none';
+  document.getElementById('toFG').style.display    = t==='daterange'?'block':'none';
+  generateReport();
+}
+async function generateReport(){
+  const type=v('reportSearchType');
   spin(true);
   try{
-    const res=await API.approveUpiPayment(detailId, currentUser.isAdmin);
-    if(!res.success) return alert2('reportAlerts',res.message||'Could not approve payment.','error');
-    alert2('reportAlerts','Payment confirmed as Paid','success');
-    await generateReport(); await refreshAll();
+    const options = { isAdmin: currentUser.isAdmin, userId: currentUser.userId, type };
+    if(type==='month'){
+      const m=v('reportMonth'); if(!m){ spin(false); return; }
+      options.month = m;
+    } else if(type==='daterange'){
+      const f=v('reportFromDate'), to=v('reportToDate');
+      if(!f||!to){ spin(false); return; }
+      options.dateFrom = f; options.dateTo = to;
+    }
+    const res = await API.generateReport(options);
+    if(!res.success){ alert2('reportAlerts', res.message || 'Could not generate report.', 'error'); return; }
+    renderReport(res.trips || []);
   }catch(e){ alert2('reportAlerts','Error: '+e.message,'error'); }
   finally{ spin(false); }
 }
-async function rejectUpiReport(detailId){
-  if(!confirm('Reject this payment report? It will go back to Pending.')) return;
-  spin(true);
-  try{
-    const res=await API.rejectUpiPayment(detailId, currentUser.isAdmin);
-    if(!res.success) return alert2('reportAlerts',res.message||'Could not reject payment.','error');
-    alert2('reportAlerts','Payment report rejected — back to Pending','info');
-    await generateReport();
-  }catch(e){ alert2('reportAlerts','Error: '+e.message,'error'); }
-  finally{ spin(false); }
+function renderReport(data){
+  const c=document.getElementById('reportContainer'), s=document.getElementById('reportStats');
+  if(!data.length){ c.style.display='none'; s.style.display='none'; alert2('reportAlerts','No transactions found','info'); return; }
+  document.getElementById('reportTableBody').innerHTML=data.slice().sort((a,b)=>b.tripDate<a.tripDate?-1:1).map(t=>`<tr><td>${t.tripDate}</td><td>${t.session}</td><td>${t.riderName}</td><td>₹${Number(t.rideAmount).toFixed(2)}</td><td>${t.paymentMethod}</td><td><span class="badge badge-${t.status.toLowerCase()}">${t.status}</span></td></tr>`).join('');
+  c.style.display='block';
+  const total=data.reduce((s,t)=>s+Number(t.rideAmount),0);
+  const paid=data.filter(t=>t.status==='Paid').reduce((s,t)=>s+Number(t.rideAmount),0);
+  document.getElementById('rptTotal').textContent=data.length;
+  document.getElementById('rptAmount').textContent='₹'+total.toFixed(2);
+  document.getElementById('rptPaid').textContent='₹'+paid.toFixed(2);
+  document.getElementById('rptOutstanding').textContent='₹'+(total-paid).toFixed(2);
+  s.style.display='block';
 }
 function exportReportPDF(){
   const el=document.getElementById('reportContainer');
   if(!el||el.style.display==='none') return alert2('reportAlerts','Generate report first','error');
   const wrap=document.createElement('div');
-  wrap.innerHTML=`<h2 style="font-family:sans-serif;margin-bottom:1rem;">RMS Journey Report — ${new Date().toLocaleDateString()}</h2>`+el.innerHTML+
-    `<p style="font-family:sans-serif;margin-top:1rem;">Total: ${document.getElementById('rptAmount').textContent} | Paid: ${document.getElementById('rptPaid').textContent} | Outstanding: ${document.getElementById('rptOutstanding').textContent}</p>`;
+  wrap.innerHTML=`<h2 style="font-family:sans-serif;margin-bottom:1rem;">CMS Trip Report — ${new Date().toLocaleDateString()}</h2>`+el.innerHTML+
+    `<p style="font-family:sans-serif;margin-top:1rem;">Total: ${document.getElementById('rptAmount').textContent} &nbsp;|&nbsp; Paid: ${document.getElementById('rptPaid').textContent} &nbsp;|&nbsp; Outstanding: ${document.getElementById('rptOutstanding').textContent}</p>`;
   html2pdf().set({margin:10,filename:'rms_report_'+Date.now()+'.pdf',image:{type:'jpeg',quality:.98},html2canvas:{scale:2},jsPDF:{orientation:'landscape',unit:'mm',format:'a4'}}).from(wrap).save();
   alert2('reportAlerts','PDF exported','success');
 }
@@ -1543,99 +1176,80 @@ function printReport(){
   const el=document.getElementById('reportContainer');
   if(!el||el.style.display==='none') return alert2('reportAlerts','Generate report first','error');
   const w=window.open('','','width=1100,height=700');
-  w.document.write('<html><head><title>RMS Report</title><style>body{font-family:Arial;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ddd;padding:8px;text-align:left;}</style></head><body>'+el.innerHTML+'</body></html>');
+  w.document.write('<html><head><title>CMS Report</title><style>body{font-family:Arial;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ddd;padding:8px;text-align:left;}</style></head><body>'+el.innerHTML+'</body></html>');
   w.document.close(); w.print();
 }
 
-/* ── WALLET REPORT (admin only) ── */
-async function generateWalletReport(){
-  if(!currentUser.isAdmin) return;
-  const dateFrom=v('walletReportFromDate'), dateTo=v('walletReportToDate');
-  const filterRiderId=v('walletReportRiderFilter');
+/* ══════════════════════════════════════════════════════════
+   SETTINGS / DATA MANAGEMENT
+   ══════════════════════════════════════════════════════════ */
+async function updatePassword(){
+  const np=v('settingsNewPassword'), cp=v('settingsConfirmPassword');
+  if(!np||!cp) return alert2('settingsAlerts','Enter new password','error');
+  if(np!==cp) return alert2('settingsAlerts','Passwords do not match','error');
+  if(np.length<6) return alert2('settingsAlerts','Min 6 characters','error');
   spin(true);
   try{
-    const res=await API.getWalletReport(currentUser.isAdmin, currentUser.userId, dateFrom, dateTo, filterRiderId);
-    if(!res.success){ alert2('reportAlerts',res.message||'Could not generate wallet report.','error'); return; }
-    renderWalletReport(res.transactions||[], res.stats||{});
-  }catch(e){ alert2('reportAlerts','Error: '+e.message,'error'); }
-  finally{ spin(false); }
-}
-function renderWalletReport(txns, stats){
-  const c=document.getElementById('walletReportContainer'), s=document.getElementById('walletReportStats');
-  if(!txns.length){ c.style.display='none'; s.style.display='none'; alert2('reportAlerts','No wallet transactions found','info'); return; }
-  document.getElementById('walletReportTableBody').innerHTML=txns.map(t=>{
-    const statusClass = (t.Status==='Success'||t.Status==='Approved') ? 'paid' : (t.Status==='Pending' ? 'pendingconfirmation' : 'balance');
-    return `<tr>
-      <td>${new Date(t.CreatedAt).toLocaleDateString()}</td>
-      <td>${t.RiderId}</td>
-      <td><span class="badge badge-${t.Type==='In'?'paid':'balance'}">${t.Type}</span></td>
-      <td>₹${Number(t.Amount).toFixed(2)}</td>
-      <td>${t.Purpose||'-'}</td>
-      <td>${t.Notes||'-'}</td>
-      <td><span class="badge badge-${statusClass}">${t.Status||'Success'}</span></td>
-    </tr>`;
-  }).join('');
-  c.style.display='block';
-  document.getElementById('wrptTotal').textContent=stats.totalCount||0;
-  document.getElementById('wrptIn').textContent='₹'+Number(stats.totalIn||0).toFixed(2);
-  document.getElementById('wrptOut').textContent='₹'+Number(stats.totalOut||0).toFixed(2);
-  document.getElementById('wrptNet').textContent='₹'+Number(stats.netAmount||0).toFixed(2);
-  s.style.display='block';
-}
-
-/* ── SETTINGS ── */
-async function initSettings(){
-  document.getElementById('adminDataSection').style.display=currentUser.isAdmin?'block':'none';
-  document.getElementById('settingsCurrentPassword').value='';
-  document.getElementById('settingsNewPassword').value='';
-  document.getElementById('settingsConfirmPassword').value='';
-  if(currentUser.isAdmin){
-    const res=await API.getSettings();
-    if(res.success){
-      document.getElementById('settingsUpiId').value=res.settings.UpiId||'';
-      document.getElementById('settingsUpiPayeeName').value=res.settings.UpiPayeeName||'';
-    }
-  }
-}
-async function saveUpiSettings(){
-  const upiId=v('settingsUpiId'), payeeName=v('settingsUpiPayeeName');
-  if(!upiId) return alert2('settingsAlerts','Enter your UPI ID','error');
-  spin(true);
-  try{
-    const res1=await API.updateSettings('UpiId', upiId);
-    const res2=await API.updateSettings('UpiPayeeName', payeeName);
-    if(!res1.success||!res2.success) return alert2('settingsAlerts','Could not save UPI settings.','error');
-    alert2('settingsAlerts','UPI settings saved','success');
-  }catch(e){ alert2('settingsAlerts','Error: '+e.message,'error'); }
-  finally{ spin(false); }
-}
-async function updatePasswordWithCurrent(){
-  const cp=v('settingsCurrentPassword'), np=v('settingsNewPassword'), cp2=v('settingsConfirmPassword');
-  if(!cp||!np||!cp2) return alert2('settingsAlerts','Fill all password fields','error');
-  if(np!==cp2) return alert2('settingsAlerts','New passwords do not match','error');
-  if(np.length<6) return alert2('settingsAlerts','New password must be min 6 characters','error');
-  spin(true);
-  try{
-    const loginRes=await API.login(currentUser.userId,cp);
-    if(!loginRes.success) return alert2('settingsAlerts','Current password is incorrect','error');
-    const res=await API.changePassword(currentUser.userId,currentUser.isAdmin,np);
-    if(!res.success) return alert2('settingsAlerts',res.message||'Could not update password','error');
-    alert2('settingsAlerts','Password updated. Please login again.','success');
-    document.getElementById('settingsCurrentPassword').value='';
+    const res = await API.changePassword(currentUser.userId, currentUser.isAdmin, np);
+    if(!res.success) return alert2('settingsAlerts', res.message || 'Could not update password.', 'error');
+    alert2('settingsAlerts','Password updated','success');
     document.getElementById('settingsNewPassword').value='';
     document.getElementById('settingsConfirmPassword').value='';
-    setTimeout(()=>handleLogout(),2000);
   }catch(e){ alert2('settingsAlerts','Error: '+e.message,'error'); }
   finally{ spin(false); }
 }
 async function exportData(){
   spin(true);
   try{
-    const [ridersRes,journeysRes,walletsRes]=await Promise.all([API.getRiders(),API.getJourneys({}),API.getAllWallets()]);
-    const blob=new Blob([JSON.stringify({exportDate:new Date().toISOString(),riders:ridersRes.riders,journeys:journeysRes.journeys,wallets:walletsRes.wallets},null,2)],{type:'application/json'});
+    const [ridersRes, tripsRes] = await Promise.all([
+      API.getRiders(),
+      API.getTrips({ isAdmin: true })
+    ]);
+    if(!ridersRes.success || !tripsRes.success){
+      return alert2('settingsAlerts', (ridersRes.message||tripsRes.message||'Export failed.'), 'error');
+    }
+    const blob=new Blob([JSON.stringify({exportDate:new Date().toISOString(),riders:ridersRes.riders,trips:tripsRes.trips},null,2)],{type:'application/json'});
     const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='rms_backup_'+Date.now()+'.json';
     document.body.appendChild(a); a.click(); a.remove();
     alert2('settingsAlerts','Data exported','success');
+  }catch(e){ alert2('settingsAlerts','Error: '+e.message,'error'); }
+  finally{ spin(false); }
+}
+function importDataDialog(){ document.getElementById('importModal').classList.add('active'); }
+function closeImportModal(){ document.getElementById('importModal').classList.remove('active'); }
+async function performImport(){
+  const file=document.getElementById('importFile').files[0];
+  if(!file) return alert2('settingsAlerts','Select a file','error');
+  spin(true);
+  try{
+    const data=JSON.parse(await file.text());
+
+    // Delete existing riders and trips from the spreadsheet
+    const ridersRes = await API.getRiders();
+    if(ridersRes.success){
+      for(const r of (ridersRes.riders||[])) await API.deleteRider(r.riderId);
+    }
+    const tripsRes = await API.getTrips({ isAdmin: true });
+    if(tripsRes.success){
+      for(const t of (tripsRes.trips||[])) await API.deleteTrip(t.tripId);
+    }
+
+    // Re-import from the backup file
+    if(data.riders) for(const r of data.riders){
+      await API.addRider({
+        riderId:r.riderId, name:r.name, email:r.email, phone:r.phone,
+        password:r.password || 'changeme123', pickupLocation:r.pickupLocation, dropLocation:r.dropLocation
+      });
+    }
+    if(data.trips) for(const t of data.trips){
+      await API.addTrip({
+        tripDate:t.tripDate, session:t.session, riderId:t.riderId,
+        rideAmount:t.rideAmount, paymentMethod:t.paymentMethod, status:t.status, remarks:t.remarks
+      });
+    }
+    alert2('settingsAlerts','Data imported','success');
+    closeImportModal();
+    await refreshAll();
   }catch(e){ alert2('settingsAlerts','Error: '+e.message,'error'); }
   finally{ spin(false); }
 }
@@ -1643,43 +1257,62 @@ async function resetApplication(){
   if(!confirm('Delete ALL data?')||!confirm('This cannot be undone. Confirm?')) return;
   spin(true);
   try{
-    const ridersRes=await API.getRiders();
-    if(ridersRes.success) for(const r of (ridersRes.riders||[])) await API.deleteRider(r.RiderId);
-    const journeysRes=await API.getJourneys({});
-    if(journeysRes.success) for(const j of (journeysRes.journeys||[])) await API.deleteJourney(j.JourneyID);
-    alert2('settingsAlerts','Application reset','success'); await refreshAll();
+    const ridersRes = await API.getRiders();
+    if(ridersRes.success){
+      for(const r of (ridersRes.riders||[])) await API.deleteRider(r.riderId);
+    }
+    const tripsRes = await API.getTrips({ isAdmin: true });
+    if(tripsRes.success){
+      for(const t of (tripsRes.trips||[])) await API.deleteTrip(t.tripId);
+    }
+    alert2('settingsAlerts','Application reset','success');
+    await refreshAll();
   }catch(e){ alert2('settingsAlerts','Error: '+e.message,'error'); }
   finally{ spin(false); }
 }
 
-/* ── SYNC STATUS ── */
+/* ══════════════════════════════════════════════════════════
+   MISC HELPERS
+   ══════════════════════════════════════════════════════════ */
+function v(id){ const el=document.getElementById(id); return el ? el.value.trim() : ''; }
+
 function updateSyncStatus(online){
-  const el=document.getElementById('syncIndicator'), lbl=document.getElementById('syncLabel');
+  const el=document.getElementById('syncIndicator');
+  const lbl=document.getElementById('syncLabel');
   if(online){ el.className='sync-indicator online'; lbl.textContent='Cloud Sync'; }
   else { el.className='sync-indicator offline'; lbl.textContent='Offline'; }
 }
 
-/* ── BOOT ── */
-window.rmsInit=async function(){
+/* ══════════════════════════════════════════════════════════
+   BOOT
+   ══════════════════════════════════════════════════════════ */
+window.rmsInit = async function(){
   if(!API.isConfigured()){
     document.getElementById('cloudNotice').style.display='block';
     updateSyncStatus(false);
     return;
   }
-  try{ const res=await API.getSettings(); updateSyncStatus(!!res.success); }
-  catch(e){ updateSyncStatus(false); }
 
-  const saved=localStorage.getItem('rmsUser');
+  // Ping the backend once to reflect real connectivity in the
+  // sync indicator; login/data calls still work either way.
+  try{
+    const res = await API.getSettings();
+    updateSyncStatus(!!res.success);
+  }catch(e){ updateSyncStatus(false); }
+
+  // Auto-login if a session exists
+  const saved = localStorage.getItem('rmsUser');
   if(saved){
-    currentUser=JSON.parse(saved);
+    currentUser = JSON.parse(saved);
     if(!currentUser.isAdmin){
-      const res=await API.getRider(currentUser.userId);
-      if(!res.success||!res.rider){ localStorage.removeItem('rmsUser'); currentUser=null; }
+      // Re-validate the rider still exists in the sheet
+      const res = await API.getRider(currentUser.userId);
+      if(!res.success || !res.rider){ localStorage.removeItem('rmsUser'); currentUser=null; }
     }
   }
-  if(currentUser) enterApp();
+  if(currentUser){ enterApp(); }
 };
-window.addEventListener('DOMContentLoaded', ()=>window.rmsInit());
+
 </script>
 </body>
 </html>
