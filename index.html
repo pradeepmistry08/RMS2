@@ -3,13 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<meta name="description" content="CMS v5.0 - Carpool Management System with Journeys & Wallet">
+<meta name="description" content="RMS v5.0 - Ride Management System with Journeys & Wallet">
 <meta name="theme-color" content="#FF9500">
-<title>CMS - Carpool Management System</title>
-<title>(Designed by Pradeep Mistry</title>
+<title>RMS - Ride Management System</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="CMS">
+<meta name="apple-mobile-web-app-title" content="RMS">
 
 <script src="api.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
@@ -261,9 +260,8 @@ tbody tr:last-child td{border-bottom:none;}
       <div class="login-logo-mark">
         <svg viewBox="0 0 24 24"><path d="M5 17h14M5 17a2 2 0 1 0 4 0M5 17a2 2 0 1 1 4 0m6 0a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0M5 17l1.5-7.5A2 2 0 0 1 8.45 8h7.1a2 2 0 0 1 1.95 1.5L19 17M3 17h2m14 0h2"/></svg>
       </div>
-      <h1>CMS</h1>
-      <p>PM Carpool Management System</p>
-      <p>(Designed by Pradeep Mistry)</p>
+      <h1>RMS</h1>
+      <p>Ride Management System</p>
     </div>
     <div id="cloudNotice" class="cloud-notice" style="display:none;">
       <b>Setup Required:</b> The Apps Script backend is not configured.<br>
@@ -294,7 +292,7 @@ tbody tr:last-child td{border-bottom:none;}
       <button class="menu-btn" onclick="toggleDrawer(true)"><svg viewBox="0 0 24 24"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
       <div class="brand">
         <div class="brand-mark"><svg viewBox="0 0 24 24"><path d="M5 17h14M5 17a2 2 0 1 0 4 0M5 17a2 2 0 1 1 4 0m6 0a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0M5 17l1.5-7.5A2 2 0 0 1 8.45 8h7.1a2 2 0 0 1 1.95 1.5L19 17M3 17h2m14 0h2"/></svg></div>
-        <div>CMS <small>Ride Management</small></div>
+        <div>RMS <small>Ride Management</small></div>
       </div>
     </div>
     <div class="nav-row" id="desktopNav"></div>
@@ -616,7 +614,7 @@ tbody tr:last-child td{border-bottom:none;}
         </div>
         <div id="reportContainer" class="card" style="display:none;">
           <div class="card-title"><svg viewBox="0 0 24 24"><path d="M4 19h16M4 19V5h16v14"/></svg>Journey Details</div>
-          <div class="table-wrap"><table><thead><tr><th>Date</th><th>Session</th><th>Rider</th><th>Amount (₹)</th><th>Status</th><th>Method</th><th>Action</th></tr></thead><tbody id="reportTableBody"></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>Date</th><th>Session</th><th>Rider</th><th>Amount (₹)</th><th>Status</th><th>Method</th><th>Notes</th><th>Action</th></tr></thead><tbody id="reportTableBody"></tbody></table></div>
         </div>
         <div id="reportStats" style="display:none;">
           <div class="stats-grid">
@@ -721,7 +719,7 @@ tbody tr:last-child td{border-bottom:none;}
       <div class="card">
         <div class="card-title"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>About</div>
         <table style="width:100%;font-size:.85rem;">
-          <tr style="border-bottom:1px solid #f1f3f7;"><td style="padding:.5rem;color:#64748b;">App</td><td style="padding:.5rem;font-weight:600;">Carpool Management System (CMS)</td></tr>
+          <tr style="border-bottom:1px solid #f1f3f7;"><td style="padding:.5rem;color:#64748b;">App</td><td style="padding:.5rem;font-weight:600;">Ride Management System (RMS)</td></tr>
           <tr style="border-bottom:1px solid #f1f3f7;"><td style="padding:.5rem;color:#64748b;">Version</td><td style="padding:.5rem;font-weight:600;">5.0 — Journey & Wallet Edition</td></tr>
           <tr><td style="padding:.5rem;color:#64748b;">Platform</td><td style="padding:.5rem;font-weight:600;">Google Sheets via Apps Script</td></tr>
         </table>
@@ -736,7 +734,7 @@ tbody tr:last-child td{border-bottom:none;}
 
 <script>
 /* ============================================================
-   CMS v5.0 — Journey & Wallet Edition
+   RMS v5.0 — Journey & Wallet Edition
    ============================================================ */
 
 let currentUser = null;
@@ -1174,11 +1172,16 @@ async function openQRModal(journeyId,riderId,detailId){
       <div class="qr-payment-card">
         <div class="qr-payment-name">${res.payload.riderName}</div>
         <div class="qr-payment-amount">₹${Number(res.payload.amount).toFixed(2)}</div>
+        <div id="qrPayWalletInfo" style="font-size:.82rem;color:#94a3b8;margin-bottom:.7rem;">Checking wallet balance…</div>
         <img src="${res.qrImageUrl}" width="200" height="200" alt="QR Code">
         <div class="payment-method-selector">
           <button class="pm-btn" id="pm-wallet" onclick="selectPaymentMethod('Wallet')">Wallet</button>
           <button class="pm-btn" id="pm-upi" onclick="selectPaymentMethod('UPI')">UPI/Card</button>
-          <button class="pm-btn" id="pm-cash" onclick="selectPaymentMethod('Cash')">Sride</button>
+          <button class="pm-btn" id="pm-cash" onclick="selectPaymentMethod('Cash')">Cash</button>
+        </div>
+        <div class="fg" style="margin-top:1rem;text-align:left;">
+          <label>Notes</label>
+          <input type="text" id="qrPaymentNotes" placeholder="Optional notes">
         </div>
       </div>
       <div class="btn-group" style="justify-content:center;margin-top:1rem;">
@@ -1186,6 +1189,20 @@ async function openQRModal(journeyId,riderId,detailId){
       </div>`;
     window._qrPaymentMethod=null;
     document.getElementById('qrPaymentModal').classList.add('active');
+    try{
+      const wRes=await API.getWallet(riderId);
+      const infoEl=document.getElementById('qrPayWalletInfo');
+      if(infoEl){
+        if(wRes.success){
+          infoEl.innerHTML=`Wallet balance: <strong style="color:#1f9d55">₹${Number(wRes.wallet.Balance||0).toFixed(2)}</strong>`;
+        } else {
+          infoEl.textContent='Wallet balance unavailable';
+        }
+      }
+    }catch(e){
+      const infoEl=document.getElementById('qrPayWalletInfo');
+      if(infoEl) infoEl.textContent='Wallet balance unavailable';
+    }
   }catch(e){ alert2('journeyAlerts','Error: '+e.message,'error'); }
   finally{ spin(false); }
 }
@@ -1196,9 +1213,10 @@ function selectPaymentMethod(method){
 }
 async function confirmQRPayment(detailId){
   if(!window._qrPaymentMethod) return alert2('alertContainer','Select a payment method','error');
+  const notes=v('qrPaymentNotes');
   spin(true);
   try{
-    const res=await API.updateJourneyDetail({detailId, paymentStatus:'Paid', paymentMethod:window._qrPaymentMethod});
+    const res=await API.updateJourneyDetail({detailId, paymentStatus:'Paid', paymentMethod:window._qrPaymentMethod, notes});
     if(!res.success) return alert2('alertContainer',res.message||'Payment update failed.','error');
     alert2('alertContainer','Payment recorded successfully','success');
     closeQRModal();
@@ -1429,6 +1447,7 @@ function renderReport(rows, stats){
       <td>₹${Number(r.RideAmount).toFixed(2)}</td>
       <td><span class="badge badge-${statusClass}">${r.PaymentStatus}</span></td>
       <td>${r.PaymentMethod||'-'}</td>
+      <td>${r.Notes||'-'}</td>
       <td>${action}</td>
     </tr>`;
   }).join('');
@@ -1450,6 +1469,10 @@ async function openRiderPayModal(detailId, riderId, riderName, amount){
       <div class="payment-method-selector">
         <button class="pm-btn" id="rp-wallet" onclick="selectRiderPayMethod('${detailId}','${riderId}','Wallet')">Pay via Wallet</button>
         <button class="pm-btn" id="rp-upi" onclick="selectRiderPayMethod('${detailId}','${riderId}','UPI')">Pay via UPI</button>
+      </div>
+      <div class="fg" style="margin-top:1rem;text-align:left;">
+        <label>Notes</label>
+        <input type="text" id="riderPayNotes" placeholder="Optional notes">
       </div>
       <div id="riderPayUpiActions" style="display:none;margin-top:1rem;">
         <button class="btn btn-info" style="width:100%;justify-content:center;" onclick="reportPaymentDone('${detailId}','${riderId}')">I've Paid — Send for Approval</button>
@@ -1476,11 +1499,12 @@ function closeRiderPayModal(){ document.getElementById('riderPayModal').classLis
 async function selectRiderPayMethod(detailId, riderId, method){
   document.querySelectorAll('#riderPayBody .pm-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById(method==='Wallet'?'rp-wallet':'rp-upi').classList.add('active');
+  const notes=v('riderPayNotes');
   if(method==='Wallet'){
     if(!confirm('Pay this amount from wallet balance now?')) return;
     spin(true);
     try{
-      const res=await API.payOutstandingViaWallet(detailId, riderId);
+      const res=await API.payOutstandingViaWallet(detailId, riderId, notes);
       if(!res.success) return alert2('alertContainer',res.message||'Could not pay from wallet.','error');
       alert2('alertContainer',`Paid from wallet. New balance: ₹${Number(res.newBalance).toFixed(2)}`,'success');
       closeRiderPayModal();
@@ -1500,9 +1524,10 @@ async function selectRiderPayMethod(detailId, riderId, method){
 }
 async function reportPaymentDone(detailId, riderId){
   if(!confirm('Send this payment for admin approval? Only do this after the UPI payment is complete.')) return;
+  const notes=v('riderPayNotes');
   spin(true);
   try{
-    const res=await API.reportUpiPayment(detailId, riderId);
+    const res=await API.reportUpiPayment(detailId, riderId, notes);
     if(!res.success) return alert2('alertContainer',res.message||'Could not report payment.','error');
     alert2('alertContainer','Payment reported. Waiting for admin confirmation.','success');
     closeRiderPayModal();
@@ -1536,7 +1561,7 @@ function exportReportPDF(){
   const el=document.getElementById('reportContainer');
   if(!el||el.style.display==='none') return alert2('reportAlerts','Generate report first','error');
   const wrap=document.createElement('div');
-  wrap.innerHTML=`<h2 style="font-family:sans-serif;margin-bottom:1rem;">CMS Journey Report — ${new Date().toLocaleDateString()}</h2>`+el.innerHTML+
+  wrap.innerHTML=`<h2 style="font-family:sans-serif;margin-bottom:1rem;">RMS Journey Report — ${new Date().toLocaleDateString()}</h2>`+el.innerHTML+
     `<p style="font-family:sans-serif;margin-top:1rem;">Total: ${document.getElementById('rptAmount').textContent} | Paid: ${document.getElementById('rptPaid').textContent} | Outstanding: ${document.getElementById('rptOutstanding').textContent}</p>`;
   html2pdf().set({margin:10,filename:'rms_report_'+Date.now()+'.pdf',image:{type:'jpeg',quality:.98},html2canvas:{scale:2},jsPDF:{orientation:'landscape',unit:'mm',format:'a4'}}).from(wrap).save();
   alert2('reportAlerts','PDF exported','success');
@@ -1545,7 +1570,7 @@ function printReport(){
   const el=document.getElementById('reportContainer');
   if(!el||el.style.display==='none') return alert2('reportAlerts','Generate report first','error');
   const w=window.open('','','width=1100,height=700');
-  w.document.write('<html><head><title>CMS Report</title><style>body{font-family:Arial;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ddd;padding:8px;text-align:left;}</style></head><body>'+el.innerHTML+'</body></html>');
+  w.document.write('<html><head><title>RMS Report</title><style>body{font-family:Arial;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ddd;padding:8px;text-align:left;}</style></head><body>'+el.innerHTML+'</body></html>');
   w.document.close(); w.print();
 }
 
