@@ -92,8 +92,8 @@ window.API = {
   getQRPaymentData: (journeyId, riderId)           => apiCall('getQRPaymentData', { journeyId, riderId }, 'GET'),
   getUpiPaymentLink: (detailId)                    => apiCall('getUpiPaymentLink', { detailId }, 'GET'),
   getUpiTopupLink: (amount, riderId)               => apiCall('getUpiTopupLink', { amount, riderId }, 'GET'),
-  payOutstandingViaWallet: (detailId, riderId)     => apiCall('payOutstandingViaWallet', { detailId, riderId }, 'POST'),
-  reportUpiPayment: (detailId, riderId)            => apiCall('reportUpiPayment', { detailId, riderId }, 'POST'),
+  payOutstandingViaWallet: (detailId, riderId, notes) => apiCall('payOutstandingViaWallet', { detailId, riderId, notes }, 'POST'),
+  reportUpiPayment: (detailId, riderId, notes)     => apiCall('reportUpiPayment', { detailId, riderId, notes }, 'POST'),
   approveUpiPayment: (detailId, isAdmin)           => apiCall('approveUpiPayment', { detailId, isAdmin }, 'POST'),
   rejectUpiPayment: (detailId, isAdmin)            => apiCall('rejectUpiPayment', { detailId, isAdmin }, 'POST'),
 
