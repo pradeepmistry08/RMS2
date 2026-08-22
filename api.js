@@ -81,7 +81,7 @@ window.API = {
   getPendingWalletRequests: ()                     => apiCall('getPendingWalletRequests', {}, 'GET'),
   approveWalletTopupRequest: (transactionId, isAdmin) => apiCall('approveWalletTopupRequest', { transactionId, isAdmin }, 'POST'),
   rejectWalletTopupRequest: (transactionId, isAdmin)  => apiCall('rejectWalletTopupRequest', { transactionId, isAdmin }, 'POST'),
-  deductWallet:     (riderId, amount, purpose, journeyId) => apiCall('deductWallet', { riderId, amount, purpose, journeyId }, 'POST'),
+  deductWallet:     (riderId, amount, purpose, journeyId, notes) => apiCall('deductWallet', { riderId, amount, purpose, journeyId, notes }, 'POST'),
   getWalletTransactions: (riderId)                 => apiCall('getWalletTransactions', { riderId }, 'GET'),
 
   // SMS
